@@ -4,12 +4,18 @@ from starlette.responses import JSONResponse, Response
 
 from .config import get_settings
 
+PRODUCTION_HIDDEN_PATHS = {"/docs", "/redoc", "/openapi.json"}
+
 
 class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
     """Small application-side guardrail layer; ingress/WAF controls remain mandatory."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
         settings = get_settings()
+
+        if settings.app_env == "production" and request.url.path in PRODUCTION_HIDDEN_PATHS:
+            return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
         content_length = request.headers.get("content-length")
         if content_length:
             try:
