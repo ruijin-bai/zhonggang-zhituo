@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     allow_demo_fallback: bool = True
     dev_user_email: str = "admin@zhituo.local"
 
+    # Authentication. Development/test may use a local identity header. Production must
+    # receive identity from an authenticated reverse proxy / enterprise SSO gateway and
+    # verify a shared gateway secret before trusting identity headers.
+    auth_mode: Literal["development_header", "trusted_proxy"] = "development_header"
+    auth_proxy_secret: str | None = None
+
     job_mode: Literal["inline", "queue"] = "inline"
     redis_url: str = "redis://127.0.0.1:6379/0"
     celery_result_expires_seconds: int = 86400
@@ -39,6 +45,10 @@ class Settings(BaseSettings):
                 raise ValueError("production requires ALLOW_DEMO_FALLBACK=false")
             if self.job_mode != "queue":
                 raise ValueError("production requires JOB_MODE=queue")
+            if self.auth_mode != "trusted_proxy":
+                raise ValueError("production requires AUTH_MODE=trusted_proxy")
+            if not self.auth_proxy_secret or len(self.auth_proxy_secret) < 32:
+                raise ValueError("production requires AUTH_PROXY_SECRET with at least 32 characters")
             if "127.0.0.1" in self.database_url or "localhost" in self.database_url:
                 raise ValueError("production DATABASE_URL must point to an explicit production database service")
             if "127.0.0.1" in self.redis_url or "localhost" in self.redis_url:
