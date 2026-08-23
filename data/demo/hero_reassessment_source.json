@@ -1,0 +1,18 @@
+{
+  "opportunity_id": "west-africa-port-access-corridor",
+  "title": "融资批准与采购计划示范公告",
+  "publisher": "多边金融机构与业主机构（脱敏演示）",
+  "published_at": "2026-08-23",
+  "source_rank": "S",
+  "is_demo": true,
+  "use_ai": false,
+  "text": "The project financing approved milestone has been confirmed. The owner has also issued a procurement plan and entered procurement preparation for the works. This is synthetic demonstration text created only to reproduce the Zhituo scoring workflow; it does not describe a real confidential project.",
+  "expected_result": {
+    "score_before": 72,
+    "grade_before": "B",
+    "score_after": 81,
+    "grade_after": "A",
+    "decision_after": "GO",
+    "applied_fields": ["financing", "project_maturity"]
+  }
+}
