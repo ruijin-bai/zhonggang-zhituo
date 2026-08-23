@@ -87,9 +87,21 @@
 9. 机会持续跟踪与变化提示
 10. 可量化的人工 vs AI 效率验证
 
-## 文档
+## 文档中心
 
-- [产品规划](docs/PRODUCT_PLAN.md)
+完整规划见 **[docs/README.md](docs/README.md)**。
+
+核心文档：
+
+- [产品总纲](docs/PRODUCT_PLAN.md)
+- [业务流程](docs/01_BUSINESS_WORKFLOW.md)
+- [产品需求](docs/02_PRODUCT_REQUIREMENTS.md)
+- [机会评分与 Go/No-Go 引擎](docs/03_SCORING_ENGINE.md)
+- [数据与 AI 设计](docs/04_DATA_AI_DESIGN.md)
+- [技术架构](docs/05_TECH_ARCHITECTURE.md)
+- [UI / UX 设计](docs/06_UI_UX_DESIGN.md)
+- [竞赛策略](docs/07_COMPETITION_STRATEGY.md)
+- [实施路线图](docs/08_IMPLEMENTATION_ROADMAP.md)
 
 ## 当前阶段
 
