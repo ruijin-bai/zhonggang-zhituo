@@ -79,15 +79,15 @@ COUNTRY_TAXONOMY = {
 }
 
 SECTOR_TAXONOMY = [
-    (("dredging", "疏浚"), "Dredging"),
-    (("port", "terminal", "quay", "码头", "港口"), "Port"),
-    (("bridge", "桥梁"), "Bridge"),
-    (("rail", "railway", "train express", "铁路", "轨道"), "Rail"),
-    (("water supply", "water treatment", "pipeline", "pipe and fittings", "供水", "水务", "管线"), "Water Supply"),
-    (("transmission line", "substation", "kv transmission", "输电", "变电站"), "Power Transmission"),
-    (("irrigation", "灌溉"), "Irrigation"),
-    (("airport", "机场"), "Airport"),
-    (("road", "highway", "corridor", "route nationale", "feeder roads", "公路", "道路"), "Road"),
+    (("dredging", "疏浚"), "疏浚工程"),
+    (("port", "terminal", "quay", "码头", "港口"), "港口工程"),
+    (("bridge", "桥梁"), "桥梁工程"),
+    (("rail", "railway", "train express", "铁路", "轨道"), "铁路工程"),
+    (("water supply", "water treatment", "pipeline", "pipe and fittings", "供水", "水务", "管线"), "水务工程"),
+    (("transmission line", "substation", "kv transmission", "输电", "变电站"), "输变电工程"),
+    (("irrigation", "灌溉"), "灌溉工程"),
+    (("airport", "机场"), "机场工程"),
+    (("road", "highway", "corridor", "route nationale", "feeder roads", "公路", "道路"), "公路工程"),
 ]
 
 
