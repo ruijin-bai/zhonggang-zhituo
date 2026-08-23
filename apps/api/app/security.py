@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 from functools import lru_cache
 from hmac import compare_digest
+import time
 from typing import Literal
 
 import jwt
+import redis
 from fastapi import Depends, Header, HTTPException, Request
 from jwt import PyJWKClient
 from sqlalchemy import or_, select
@@ -34,6 +36,17 @@ class Principal:
 @lru_cache(maxsize=4)
 def _jwk_client(jwks_url: str) -> PyJWKClient:
     return PyJWKClient(jwks_url, cache_keys=True, lifespan=300)
+
+
+@lru_cache(maxsize=1)
+def _rate_limit_redis():
+    settings = get_settings()
+    return redis.Redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+    )
 
 
 def _oidc_identity(authorization: str | None) -> str:
@@ -143,6 +156,34 @@ def _select_membership(
     return membership, organization
 
 
+def _enforce_authenticated_rate_limit(principal: Principal) -> None:
+    settings = get_settings()
+    if settings.app_env != "production":
+        return
+    limit = settings.authenticated_rate_limit_per_minute
+    if limit <= 0:
+        return
+
+    minute = int(time.time() // 60)
+    key = f"zhituo:rate:{principal.organization_id}:{principal.user_id}:{minute}"
+    try:
+        client = _rate_limit_redis()
+        with client.pipeline(transaction=True) as pipe:
+            pipe.incr(key)
+            pipe.expire(key, 120)
+            count, _ = pipe.execute()
+    except redis.RedisError as exc:
+        raise HTTPException(status_code=503, detail="Rate-limit backend unavailable") from exc
+
+    if int(count) > limit:
+        retry_after = max(1, 60 - int(time.time() % 60))
+        raise HTTPException(
+            status_code=429,
+            detail="Authenticated request rate limit exceeded",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
 def get_principal(
     request: Request,
     db: Session = Depends(get_db),
@@ -176,9 +217,10 @@ def get_principal(
         organization_name=organization.name,
         role=membership.role,
     )
+    request.state.principal = principal
+    _enforce_authenticated_rate_limit(principal)
     # Bind both SQLAlchemy ORM filtering and PostgreSQL RLS to this organization.
     set_tenant_context(db, organization.id)
-    request.state.principal = principal
     return principal
 
 
