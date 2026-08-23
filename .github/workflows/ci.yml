@@ -64,6 +64,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install PostgreSQL client tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
       - run: python -m pip install --upgrade pip
       - run: pip install -e '.[dev]'
       - name: Verify dependency graph
@@ -78,6 +82,20 @@ jobs:
         run: |
           alembic downgrade -1
           alembic upgrade head
+      - name: Provision and verify least-privilege database roles
+        env:
+          PGPASSWORD: zhituo
+        run: |
+          psql -h 127.0.0.1 -U zhituo -d zhituo \
+            --set=database_name=zhituo \
+            --set=runtime_role=zhituo_ci_runtime \
+            --set=runtime_password='ci-runtime-password-123456789' \
+            --set=backup_role=zhituo_ci_backup \
+            --set=backup_password='ci-backup-password-123456789' \
+            -f ../../ops/postgres/provision_runtime_role.sql
+          test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT rolbypassrls FROM pg_roles WHERE rolname='zhituo_ci_runtime'")" = "f"
+          test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT rolbypassrls FROM pg_roles WHERE rolname='zhituo_ci_backup'")" = "t"
+          test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_backup','opportunities','INSERT')")" = "f"
       - name: Verify Redis connectivity
         run: python -c "from redis import Redis; assert Redis.from_url('redis://127.0.0.1:6379/0').ping()"
       - name: Run unit, integration and PostgreSQL RLS tests
@@ -86,6 +104,24 @@ jobs:
         run: |
           zhituo-api reset-demo
           zhituo-api status
+      - name: Exercise PostgreSQL backup and restore to isolated database
+        env:
+          PGPASSWORD: zhituo
+        run: |
+          rm -rf /tmp/zhituo-backup-ci
+          DATABASE_URL='postgresql://zhituo:zhituo@127.0.0.1:5432/zhituo' \
+            BACKUP_DIR=/tmp/zhituo-backup-ci \
+            RETENTION_DAYS=0 \
+            bash ../../ops/postgres/backup.sh
+          BACKUP_FILE="$(find /tmp/zhituo-backup-ci -name 'zhituo-*.dump' -type f | head -n 1)"
+          test -n "$BACKUP_FILE"
+          dropdb --if-exists -h 127.0.0.1 -U zhituo zhituo_restore_ci
+          createdb -h 127.0.0.1 -U zhituo zhituo_restore_ci
+          TARGET_DATABASE_URL='postgresql://zhituo:zhituo@127.0.0.1:5432/zhituo_restore_ci' \
+            BACKUP_FILE="$BACKUP_FILE" \
+            CONFIRM_RESTORE=YES \
+            bash ../../ops/postgres/restore.sh
+          test "$(psql -h 127.0.0.1 -U zhituo -d zhituo_restore_ci -Atc 'SELECT count(*) FROM opportunities')" -gt 0
 
   containers:
     runs-on: ubuntu-latest
