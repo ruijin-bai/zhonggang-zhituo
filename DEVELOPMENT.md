@@ -9,7 +9,7 @@ npm run dev:web
 
 打开 `http://localhost:3000`。
 
-开发模式可保留 Demo fallback。生产模式必须关闭 fallback，避免 API 故障时向经营人员展示模拟数据。
+开发/比赛演示模式可保留 Demo fallback。生产模式必须关闭 fallback，避免 API 故障时向经营人员展示模拟数据。
 
 ## 2. PostgreSQL + Redis
 
@@ -33,6 +33,35 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 开发 seed 会创建 `admin@zhituo.local` 管理员身份和演示组织。首次演示时，英雄项目刻意初始化为 **72/B**，后续由情报重评链真实推进到 **81/A**。
+
+### 比赛/录屏前一键恢复英雄案例
+
+```bash
+cd apps/api
+zhituo-api reset-demo
+```
+
+`reset-demo` 只删除 `is_demo=true` 的演示业务数据，再重新 seed：
+
+- 英雄项目恢复为 72/B 基线；
+- 重置 Demo Evidence / Source / ScoreSnapshot / Event；
+- 重置 Demo Watchlist、Action、Alert、AI Analysis；
+- 恢复固定的 3 项经营行动和策略版本；
+- `is_demo=false` 的公开/真实项目不会被删除；
+- 演示组织和开发身份保持不变。
+
+因此每次正式录屏前建议执行：
+
+```bash
+docker compose up -d db redis
+cd apps/api
+alembic upgrade head
+zhituo-api reset-demo
+zhituo-api status
+uvicorn app.main:app --port 8000
+```
+
+随后另开终端启动 Web。
 
 ## 4. Celery Worker
 
@@ -136,7 +165,27 @@ AI_MODEL_ANALYSIS=<analysis-model>
 
 模型失败时，允许确定性抽取或模板化分析降级；已经写入的 Source / Evidence 不因模型失败而损坏。
 
-## 8. 自动重评安全阈值
+## 8. 演示 fallback 与生产隔离
+
+比赛/开发环境可以设置：
+
+```bash
+ALLOW_DEMO_FALLBACK=true
+NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=true
+```
+
+此时 API、AI 或外网不可用时，市场雷达、机会池、情报重评、跟踪、策略、红队和作战卡仍可使用明确标识的离线演示结果。
+
+生产环境必须设置：
+
+```bash
+ALLOW_DEMO_FALLBACK=false
+NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=false
+```
+
+前端和后端都必须尊重这一开关；生产故障应显式报错，不能静默展示 Demo 数据。
+
+## 9. 自动重评安全阈值
 
 只有同时满足以下条件，来源事实才允许自动修改评分：
 
@@ -147,7 +196,7 @@ AI_MODEL_ANALYSIS=<analysis-model>
 
 否则来源只保存为 Evidence，不自动改变经营等级。
 
-## 9. 生产模式基线
+## 10. 生产模式基线
 
 生产环境至少需要：
 
@@ -164,7 +213,7 @@ REDIS_URL=redis://...
 
 生产环境禁止本地数据库/Redis 地址、禁止静默 Demo fallback、禁止同步执行网页抓取和 AI 长任务。
 
-## 10. 工程原则
+## 11. 工程原则
 
 - Demo 数据与生产数据明确隔离；
 - 新发现项目先进入 Draft；
