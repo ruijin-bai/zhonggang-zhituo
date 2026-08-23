@@ -165,6 +165,9 @@ def complete_operation(
 def fail_operation(session: Session, handle: IdempotencyHandle, detail: str) -> None:
     if handle.record_id is None:
         return
+    # The business operation may have left the Session in a failed transaction state.
+    # Roll back uncommitted work before persisting the conservative failed marker.
+    session.rollback()
     record = session.get(IdempotencyRecord, handle.record_id)
     if record is None:
         return
