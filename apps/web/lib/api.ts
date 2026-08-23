@@ -1,17 +1,17 @@
 import { demoOpportunities } from "./demo";
+import { serverApiFetch } from "./server-api";
 import type { Opportunity, RadarOverview } from "./types";
 
-const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
 const ALLOW_DEMO_FALLBACK = process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK !== "false";
 
 function apiFailure(message: string, error: unknown): never {
   console.error(`[Zhituo API] ${message}`, error);
-  throw new Error(`${message}。生产模式不会回退到 Demo 数据，请检查 API、数据库与运行环境。`);
+  throw new Error(`${message}。生产模式不会回退到 Demo 数据，请检查认证、API、数据库与运行环境。`);
 }
 
 export async function getOpportunities(): Promise<Opportunity[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/opportunities`, { next: { revalidate: 30 } });
+    const response = await serverApiFetch("/api/opportunities", { next: { revalidate: 30 } });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
   } catch (error) {
@@ -22,7 +22,7 @@ export async function getOpportunities(): Promise<Opportunity[]> {
 
 export async function getOpportunity(id: string): Promise<Opportunity | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/opportunities/${id}`, { next: { revalidate: 30 } });
+    const response = await serverApiFetch(`/api/opportunities/${encodeURIComponent(id)}`, { next: { revalidate: 30 } });
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
@@ -71,7 +71,7 @@ function demoRadar(): RadarOverview {
 
 export async function getRadar(): Promise<RadarOverview> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/radar`, { next: { revalidate: 20 } });
+    const response = await serverApiFetch("/api/radar", { next: { revalidate: 20 } });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
   } catch (error) {
