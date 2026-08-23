@@ -10,6 +10,8 @@ from .ingestion import ingest_source
 from .models import DiscoverRequest, SourceIngestRequest
 from .radar import BatchScanRequest, batch_scan
 from .repository import get_opportunity
+from .strategy import get_strategy
+from .strategy_ai import generate_strategy, red_team
 
 
 def _json(model):
@@ -57,3 +59,30 @@ def opportunity_analyze_task(self, opportunity_id: str) -> dict:
             return {"mode": mode, "opportunity_id": opportunity_id, "analysis": _json(analysis)}
     except SoftTimeLimitExceeded as exc:
         raise RuntimeError("AI 经营研判任务超过软超时限制") from exc
+
+
+@celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 2}, name="zhituo.strategy.generate")
+def strategy_generate_task(self, opportunity_id: str) -> dict:
+    try:
+        with SessionLocal() as session:
+            item = get_opportunity(opportunity_id, session)
+            if item is None:
+                raise ValueError("Opportunity not found")
+            draft, mode = asyncio.run(generate_strategy(item))
+            return {"mode": mode, "opportunity_id": opportunity_id, "draft": _json(draft)}
+    except SoftTimeLimitExceeded as exc:
+        raise RuntimeError("赢标策略生成任务超过软超时限制") from exc
+
+
+@celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 2}, name="zhituo.strategy.red_team")
+def strategy_red_team_task(self, opportunity_id: str) -> dict:
+    try:
+        with SessionLocal() as session:
+            item = get_opportunity(opportunity_id, session)
+            if item is None:
+                raise ValueError("Opportunity not found")
+            workspace = get_strategy(opportunity_id, session)
+            challenge, mode = asyncio.run(red_team(item, workspace.strategy))
+            return {"mode": mode, "opportunity_id": opportunity_id, "challenge": _json(challenge)}
+    except SoftTimeLimitExceeded as exc:
+        raise RuntimeError("红队挑战任务超过软超时限制") from exc
