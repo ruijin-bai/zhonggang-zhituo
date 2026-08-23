@@ -75,7 +75,6 @@ def get_tracking_board(session: Session) -> TrackingBoard:
         events = session.scalars(select(OpportunityEventRecord).order_by(OpportunityEventRecord.occurred_at.desc()).limit(100)).all()
     except SQLAlchemyError:
         session.rollback()
-        # read-only demo fallback: surface A/B opportunities as suggested tracking items
         items = []
         for item in list_opportunities(session)[:5]:
             items.append({"opportunity": item.model_dump(), "watch": None, "actions": [], "alerts": [], "timeline": []})
@@ -133,17 +132,21 @@ def add_action(opportunity_id: str, payload: ActionCreate, session: Session) -> 
 def complete_action(action_id: int, session: Session) -> dict:
     action = session.get(PursuitActionRecord, action_id)
     if not action: raise ValueError("行动不存在")
+    if action.status == "done":
+        return {"ok": True, "action_id": action.id, "already_completed": True}
     action.status = "done"
     action.completed_at = _now()
     session.add(OpportunityEventRecord(opportunity_id=action.opportunity_id, event_type="action_completed", payload={"action_id": action.id, "title": action.title}))
     session.commit()
-    return {"ok": True, "action_id": action.id}
+    return {"ok": True, "action_id": action.id, "already_completed": False}
 
 
 def resolve_alert(alert_id: int, session: Session) -> dict:
     alert = session.get(PursuitAlertRecord, alert_id)
     if not alert: raise ValueError("预警不存在")
+    if alert.status == "resolved":
+        return {"ok": True, "alert_id": alert.id, "already_resolved": True}
     alert.status = "resolved"
     alert.resolved_at = _now()
     session.commit()
-    return {"ok": True, "alert_id": alert.id}
+    return {"ok": True, "alert_id": alert.id, "already_resolved": False}
