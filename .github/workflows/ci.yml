@@ -68,12 +68,12 @@ jobs:
         run: pip check
       - name: Compile Python sources
         run: python -m compileall -q app
-      - name: Run unit and integration tests
-        run: pytest -q
       - name: Apply database migrations on clean PostgreSQL
         run: alembic upgrade head
       - name: Verify Redis connectivity
         run: python -c "from redis import Redis; assert Redis.from_url('redis://127.0.0.1:6379/0').ping()"
+      - name: Run unit and integration tests
+        run: pytest -q
       - name: Verify repeatable demo seed and CLI
         run: |
           zhituo-api reset-demo
