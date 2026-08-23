@@ -1,6 +1,10 @@
+[build-system]
+requires = ["setuptools>=78", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "zhituo-api"
-version = "0.10.0"
+version = "0.10.1"
 description = "Zhonggang Zhituo market intelligence API"
 requires-python = ">=3.12"
 dependencies = [
@@ -21,6 +25,11 @@ dev = ["pytest>=8.4,<9", "ruff>=0.12,<1"]
 
 [project.scripts]
 zhituo-api = "app.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+exclude = ["alembic*", "tests*"]
 
 [tool.ruff]
 line-length = 100
