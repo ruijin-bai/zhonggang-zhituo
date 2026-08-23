@@ -1,7 +1,7 @@
 import uuid
 
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
@@ -59,6 +59,7 @@ def test_postgres_rls_blocks_cross_tenant_reads_for_runtime_role() -> None:
 
     admin_engine = create_engine(settings.database_url, pool_pre_ping=True)
     runtime_engine = None
+    role_created = False
     try:
         with Session(admin_engine) as session:
             session.add_all(
@@ -72,9 +73,13 @@ def test_postgres_rls_blocks_cross_tenant_reads_for_runtime_role() -> None:
             session.commit()
 
         with admin_engine.begin() as connection:
-            connection.execute(text(f'CREATE ROLE "{role}" LOGIN PASSWORD :password'), {"password": password})
-            connection.execute(text(f'GRANT USAGE ON SCHEMA public TO "{role}"'))
-            connection.execute(text(f'GRANT SELECT ON TABLE opportunities TO "{role}"'))
+            connection.exec_driver_sql(
+                f'CREATE ROLE "{role}" LOGIN PASSWORD %s',
+                (password,),
+            )
+            role_created = True
+            connection.exec_driver_sql(f'GRANT USAGE ON SCHEMA public TO "{role}"')
+            connection.exec_driver_sql(f'GRANT SELECT ON TABLE opportunities TO "{role}"')
 
         runtime_url = make_url(settings.database_url).set(username=role, password=password)
         runtime_engine = create_engine(runtime_url, pool_pre_ping=True)
@@ -102,7 +107,9 @@ def test_postgres_rls_blocks_cross_tenant_reads_for_runtime_role() -> None:
         if runtime_engine is not None:
             runtime_engine.dispose()
         with admin_engine.begin() as connection:
-            connection.execute(text(f'DROP ROLE IF EXISTS "{role}"'))
+            if role_created:
+                connection.exec_driver_sql(f'DROP OWNED BY "{role}"')
+                connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
             connection.execute(
                 text("DELETE FROM opportunities WHERE id IN (:a, :b)"),
                 {"a": project_a, "b": project_b},
