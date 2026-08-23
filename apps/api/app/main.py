@@ -3,6 +3,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from .ai import AIService
+from .battlecard import get_battlecard
 from .config import get_settings
 from .db import get_db
 from .discovery import confirm_draft, discover
@@ -14,11 +15,11 @@ from .scoring import calculate_score
 from .strategy import StrategyUpsert, StrategyWorkspace, get_strategy, save_strategy
 from .strategy_ai import generate_strategy, red_team
 from .tracking import ActionCreate, TrackingBoard, WatchUpsert, add_action, complete_action, get_tracking_board, resolve_alert, watch_opportunity
-settings=get_settings(); app=FastAPI(title="中港智拓 API",version="0.7.0"); app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origin_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
+settings=get_settings(); app=FastAPI(title="中港智拓 API",version="0.8.0"); app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origin_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 @app.get("/health")
-def health(): return {"status":"ok","service":"zhituo-api","version":"0.7.0"}
+def health(): return {"status":"ok","service":"zhituo-api","version":"0.8.0"}
 @app.get("/api/meta")
-def meta(): return {"version":"0.7.0","data_backend":settings.data_backend,"ai_enabled":settings.ai_enabled,"ai_extraction_model":settings.ai_model_extraction if settings.ai_enabled else None,"ai_analysis_model":settings.ai_model_analysis if settings.ai_enabled else None}
+def meta(): return {"version":"0.8.0","data_backend":settings.data_backend,"ai_enabled":settings.ai_enabled,"ai_extraction_model":settings.ai_model_extraction if settings.ai_enabled else None,"ai_analysis_model":settings.ai_model_analysis if settings.ai_enabled else None}
 @app.get("/api/opportunities",response_model=list[Opportunity])
 def opportunities(db:Session=Depends(get_db)): return list_opportunities(db)
 @app.get("/api/opportunities/{opportunity_id}",response_model=Opportunity)
@@ -31,6 +32,10 @@ def opportunity_score(opportunity_id:str,db:Session=Depends(get_db)):
  item=get_opportunity(opportunity_id,db)
  if not item: raise HTTPException(404,"Opportunity not found")
  result=calculate_score(item.breakdown,item.confidence); return {"opportunity_id":item.id,"total":result.total,"grade":result.grade,"decision":result.decision,"confidence":item.confidence,"breakdown":item.breakdown}
+@app.get("/api/opportunities/{opportunity_id}/battlecard")
+def opportunity_battlecard(opportunity_id:str,db:Session=Depends(get_db)):
+ try:return get_battlecard(opportunity_id,db)
+ except ValueError as exc:raise HTTPException(404,str(exc)) from exc
 @app.get("/api/radar",response_model=RadarOverview)
 def market_radar(db:Session=Depends(get_db)): return get_radar(db)
 @app.post("/api/discovery/batch",response_model=BatchScanResult)
