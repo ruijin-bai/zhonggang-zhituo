@@ -61,32 +61,53 @@ def _output_text(payload: dict) -> str:
     raise ValueError("AI response did not contain output_text")
 
 
+COUNTRY_TAXONOMY = {
+    "nigeria": ("Nigeria", "West Africa"), "尼日利亚": ("尼日利亚", "西非"),
+    "ghana": ("Ghana", "West Africa"), "加纳": ("加纳", "西非"),
+    "gambia": ("Gambia", "West Africa"), "冈比亚": ("冈比亚", "西非"),
+    "senegal": ("Senegal", "West Africa"), "塞内加尔": ("塞内加尔", "西非"),
+    "kenya": ("Kenya", "East Africa"), "肯尼亚": ("肯尼亚", "东非"),
+    "tanzania": ("Tanzania", "East Africa"), "坦桑尼亚": ("坦桑尼亚", "东非"),
+    "uganda": ("Uganda", "East Africa"), "乌干达": ("乌干达", "东非"),
+    "ethiopia": ("Ethiopia", "East Africa"), "埃塞俄比亚": ("埃塞俄比亚", "东非"),
+    "djibouti": ("Djibouti", "East Africa"), "吉布提": ("吉布提", "东非"),
+    "mozambique": ("Mozambique", "Southern Africa"), "莫桑比克": ("莫桑比克", "南部非洲"),
+    "angola": ("Angola", "Southern Africa"), "安哥拉": ("安哥拉", "南部非洲"),
+    "são tome and príncipe": ("São Tome and Príncipe", "Central Africa"),
+    "sao tome and principe": ("São Tome and Príncipe", "Central Africa"),
+    "圣多美和普林西比": ("圣多美和普林西比", "中部非洲"),
+}
+
+SECTOR_TAXONOMY = [
+    (("dredging", "疏浚"), "Dredging"),
+    (("port", "terminal", "quay", "码头", "港口"), "Port"),
+    (("bridge", "桥梁"), "Bridge"),
+    (("rail", "railway", "train express", "铁路", "轨道"), "Rail"),
+    (("water supply", "water treatment", "pipeline", "pipe and fittings", "供水", "水务", "管线"), "Water Supply"),
+    (("transmission line", "substation", "kv transmission", "输电", "变电站"), "Power Transmission"),
+    (("irrigation", "灌溉"), "Irrigation"),
+    (("airport", "机场"), "Airport"),
+    (("road", "highway", "corridor", "route nationale", "feeder roads", "公路", "道路"), "Road"),
+]
+
+
 def _deterministic_project(text: str, page_title: str) -> ProjectDiscovery:
     lowered = text.lower()
-    project_terms = ("project", "corridor", "port", "road", "bridge", "highway", "railway", "airport", "terminal", "dredging", "工程", "项目", "公路", "港口", "桥梁", "铁路", "机场", "疏浚")
+    project_terms = (
+        "project", "corridor", "port", "road", "bridge", "highway", "railway", "airport",
+        "terminal", "dredging", "water supply", "transmission line", "substation", "irrigation",
+        "工程", "项目", "公路", "港口", "桥梁", "铁路", "机场", "疏浚", "供水", "输电", "灌溉",
+    )
     detected = any(term in lowered for term in project_terms)
-    countries = {
-        "nigeria": ("Nigeria", "West Africa"), "尼日利亚": ("尼日利亚", "西非"),
-        "ghana": ("Ghana", "West Africa"), "加纳": ("加纳", "西非"),
-        "kenya": ("Kenya", "East Africa"), "肯尼亚": ("肯尼亚", "东非"),
-        "tanzania": ("Tanzania", "East Africa"), "坦桑尼亚": ("坦桑尼亚", "东非"),
-        "angola": ("Angola", "Southern Africa"), "安哥拉": ("安哥拉", "南部非洲"),
-    }
+
     country, region = "待识别", "待识别"
-    for keyword, values in countries.items():
+    for keyword, values in COUNTRY_TAXONOMY.items():
         if keyword in lowered:
             country, region = values
             break
 
     sector = "待识别"
-    for terms, label in [
-        (("port", "terminal", "港口", "码头"), "港口工程"),
-        (("dredging", "疏浚"), "疏浚工程"),
-        (("bridge", "桥梁"), "桥梁工程"),
-        (("road", "highway", "corridor", "公路", "道路"), "公路工程"),
-        (("rail", "railway", "铁路"), "铁路工程"),
-        (("airport", "机场"), "机场工程"),
-    ]:
+    for terms, label in SECTOR_TAXONOMY:
         if any(term in lowered for term in terms):
             sector = label
             break
@@ -105,9 +126,15 @@ def _deterministic_project(text: str, page_title: str) -> ProjectDiscovery:
         value = raw * 1000 if unit in {"billion", "bn"} else raw
 
     owner = "待识别"
-    owner_match = re.search(r"(?:owner|employer|client|业主)[：:\s]+([^\n。.;]{3,100})", text, re.I)
-    if owner_match:
-        owner = owner_match.group(1).strip()
+    owner_patterns = [
+        r"(?:owner|employer|client|业主)[：:\s]+([^\n。.;]{3,120})",
+        r"(?:executing agency|implementing agency)[：:\s]+([^\n。.;]{3,120})",
+    ]
+    for pattern in owner_patterns:
+        owner_match = re.search(pattern, text, re.I)
+        if owner_match:
+            owner = owner_match.group(1).strip()
+            break
 
     title = page_title.strip() if page_title and page_title != "公开来源" else "待确认工程项目机会"
     confidence = 0.62 if detected else 0.25
@@ -185,6 +212,8 @@ class AIService:
             except (httpx.HTTPError, ValueError, RuntimeError, json.JSONDecodeError):
                 pass
         evidence_gaps: list[str] = []
-        if not opportunity.evidence: evidence_gaps.append("当前项目尚未绑定高质量证据来源")
-        if opportunity.confidence < 70: evidence_gaps.append("研判置信度偏低，需要补充关键事实")
+        if not opportunity.evidence:
+            evidence_gaps.append("当前项目尚未绑定高质量证据来源")
+        if opportunity.confidence < 70:
+            evidence_gaps.append("研判置信度偏低，需要补充关键事实")
         return AnalysisResult(conclusion=opportunity.pursuit_thesis, strengths=[f"当前机会评分 {opportunity.score} / {opportunity.grade} 级"], risks=["规则评分不能替代经营负责人最终决策"], next_actions=opportunity.next_actions, evidence_gaps=evidence_gaps), "deterministic"
