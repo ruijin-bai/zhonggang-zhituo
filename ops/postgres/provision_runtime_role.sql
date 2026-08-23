@@ -2,6 +2,7 @@
 
 -- Usage (run as a DBA/migration administrator; BYPASSRLS assignment requires sufficient privilege):
 --   psql "$MIGRATION_DATABASE_URL" \
+--     --set=database_name=zhituo \
 --     --set=runtime_role=zhituo_runtime \
 --     --set=runtime_password='secret-from-manager' \
 --     --set=backup_role=zhituo_backup \
@@ -38,7 +39,7 @@ SELECT format(
 WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'backup_role')
 \gexec
 
-GRANT CONNECT ON DATABASE :"DBNAME" TO :"runtime_role", :"backup_role";
+GRANT CONNECT ON DATABASE :"database_name" TO :"runtime_role", :"backup_role";
 GRANT USAGE ON SCHEMA public TO :"runtime_role", :"backup_role";
 
 -- Identity/control-plane reads required before tenant context is selected.
