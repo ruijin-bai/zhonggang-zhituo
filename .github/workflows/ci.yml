@@ -27,6 +27,7 @@ jobs:
       APP_ENV: test
       DATA_BACKEND: database
       DATABASE_URL: postgresql+psycopg://zhituo:zhituo@127.0.0.1:5432/zhituo
+      DATABASE_RLS_ENABLED: "true"
       JOB_MODE: queue
       REDIS_URL: redis://127.0.0.1:6379/0
       DEMO_MODE: "true"
@@ -69,11 +70,17 @@ jobs:
         run: pip check
       - name: Compile Python sources
         run: python -m compileall -q app
+      - name: Validate operations shell scripts
+        run: bash -n ../../ops/postgres/backup.sh ../../ops/postgres/restore.sh
       - name: Apply database migrations on clean PostgreSQL
         run: alembic upgrade head
+      - name: Verify latest migration downgrade and re-upgrade
+        run: |
+          alembic downgrade -1
+          alembic upgrade head
       - name: Verify Redis connectivity
         run: python -c "from redis import Redis; assert Redis.from_url('redis://127.0.0.1:6379/0').ping()"
-      - name: Run unit and integration tests
+      - name: Run unit, integration and PostgreSQL RLS tests
         run: pytest -q
       - name: Verify repeatable demo seed and CLI
         run: |
@@ -86,5 +93,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build API production image
         run: docker build --pull -t zhituo-api:ci apps/api
+      - name: Smoke import API production image
+        run: docker run --rm --entrypoint python zhituo-api:ci -c "import app.main; print('api-import-ok')"
       - name: Build Web production image
         run: docker build --pull -t zhituo-web:ci apps/web
