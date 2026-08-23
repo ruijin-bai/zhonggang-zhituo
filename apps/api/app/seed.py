@@ -4,12 +4,22 @@ from pathlib import Path
 from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from .db import EvidenceRecord, OpportunityEventRecord, OpportunityRecord, PursuitActionRecord, ScoreSnapshotRecord, WatchItemRecord
+from .db import EvidenceRecord, MembershipRecord, OpportunityEventRecord, OpportunityRecord, OrganizationRecord, PursuitActionRecord, ScoreSnapshotRecord, UserRecord, WatchItemRecord
 from .models import Opportunity, ScoreBreakdown
 from .scoring import calculate_score
 DATA_FILE=Path(__file__).resolve().parents[3]/"data"/"demo"/"opportunities.json"; HERO_ID="west-africa-port-access-corridor"
 def _date(value:str)->datetime:return datetime.fromisoformat(value).replace(tzinfo=timezone.utc)
+def _seed_identity(session:Session)->None:
+ org=session.scalar(select(OrganizationRecord).where(OrganizationRecord.code=="CHEC-DEMO"))
+ if org is None:
+  org=OrganizationRecord(id=str(uuid4()),name="中港智拓演示组织",code="CHEC-DEMO",is_active=True);session.add(org);session.flush()
+ user=session.scalar(select(UserRecord).where(UserRecord.email=="admin@zhituo.local"))
+ if user is None:
+  user=UserRecord(id=str(uuid4()),email="admin@zhituo.local",display_name="智拓管理员",is_active=True);session.add(user);session.flush()
+ membership=session.scalar(select(MembershipRecord).where(MembershipRecord.organization_id==org.id,MembershipRecord.user_id==user.id))
+ if membership is None:session.add(MembershipRecord(organization_id=org.id,user_id=user.id,role="admin",is_active=True))
 def seed_demo_data(session:Session)->int:
+ _seed_identity(session)
  payload=json.loads(DATA_FILE.read_text(encoding="utf-8"));created=0
  for raw in payload:
   item=Opportunity.model_validate(raw)
