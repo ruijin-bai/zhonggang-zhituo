@@ -1,7 +1,9 @@
+from uuid import uuid4
+
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.db import Base, OpportunityRecord, PursuitActionRecord, WatchItemRecord
+from app.db import Base, OpportunityRecord, OrganizationRecord, PursuitActionRecord, WatchItemRecord
 from app.seed import HERO_ID, reset_demo_data, seed_demo_data
 
 
@@ -10,9 +12,19 @@ def test_reset_demo_is_repeatable_and_preserves_non_demo() -> None:
     Base.metadata.create_all(engine)
 
     with Session(engine) as session:
+        org = OrganizationRecord(
+            id=str(uuid4()),
+            name="测试组织",
+            code="TEST-ORG",
+            is_active=True,
+        )
+        session.add(org)
+        session.flush()
+
         session.add(
             OpportunityRecord(
                 id="public-real-opportunity",
+                organization_id=org.id,
                 title="公开项目样例",
                 country="测试国",
                 region="测试区域",
