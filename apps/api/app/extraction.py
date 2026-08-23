@@ -4,14 +4,82 @@ from .models import ExtractedFact, SourceExtraction
 
 
 FINANCING_RULES: list[tuple[tuple[str, ...], str, int, float]] = [
-    (("has received financing", "received financing from", "loan approved", "financing approved", "approved financing", "贷款获批", "融资获批", "批准贷款", "董事会批准", "已获得融资"), "已获批或融资落实", 15, 0.96),
-    (("financing agreement", "loan agreement", "融资框架", "贷款协议", "贷款谈判", "融资谈判"), "融资框架/贷款谈判明确", 11, 0.88),
-    (("financial institution", "financier engagement", "金融机构接触", "融资接触"), "已与金融机构接触", 8, 0.78),
+    (
+        (
+            "has received financing",
+            "received financing from",
+            "loan approved",
+            "approved the loan",
+            "board approved the loan",
+            "financing approved",
+            "approved financing",
+            "verified financing",
+            "贷款获批",
+            "融资获批",
+            "批准贷款",
+            "董事会批准",
+            "已获得融资",
+        ),
+        "已获批或融资落实",
+        15,
+        0.96,
+    ),
+    (
+        (
+            "financing agreement",
+            "loan agreement",
+            "融资框架",
+            "贷款协议",
+            "贷款谈判",
+            "融资谈判",
+        ),
+        "融资框架/贷款谈判明确",
+        11,
+        0.88,
+    ),
+    (
+        (
+            "financial institution",
+            "financier engagement",
+            "金融机构接触",
+            "融资接触",
+        ),
+        "已与金融机构接触",
+        8,
+        0.78,
+    ),
 ]
 
 MATURITY_RULES: list[tuple[tuple[str, ...], str, int, float]] = [
-    (("invitation for bids", "tender notice", "request for bids", "正式招标", "招标公告", "投标邀请"), "正式采购/招标临近", 15, 0.96),
-    (("procurement plan", "procurement preparation", "采购计划", "采购准备"), "融资与采购准备中", 13, 0.92),
+    (
+        (
+            "invitation for bids",
+            "invitations for bids",
+            "invitation to bid",
+            "invitations to bid",
+            "tender notice",
+            "request for bids",
+            "formal procurement-stage",
+            "formal procurement",
+            "正式招标",
+            "招标公告",
+            "投标邀请",
+        ),
+        "正式采购/招标临近",
+        15,
+        0.96,
+    ),
+    (
+        (
+            "procurement plan",
+            "procurement preparation",
+            "采购计划",
+            "采购准备",
+        ),
+        "融资与采购准备中",
+        13,
+        0.92,
+    ),
     (("feasibility study completed", "可研完成"), "可研完成/预算明确", 10, 0.90),
     (("feasibility study", "可研启动", "预可研"), "预可研/可研启动", 8, 0.82),
     (("government plan", "development plan", "纳入政府规划", "政府规划"), "纳入政府规划", 5, 0.78),
