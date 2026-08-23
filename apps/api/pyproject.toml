@@ -1,6 +1,6 @@
 [project]
 name = "zhituo-api"
-version = "0.1.0"
+version = "0.2.0"
 description = "Zhonggang Zhituo market intelligence API"
 requires-python = ">=3.12"
 dependencies = [
@@ -10,12 +10,19 @@ dependencies = [
   "pydantic-settings>=2.10,<3",
   "sqlalchemy>=2.0,<3",
   "psycopg[binary]>=3.2,<4",
+  "alembic>=1.16,<2",
   "httpx>=0.28,<1"
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.4,<9", "ruff>=0.12,<1"]
 
+[project.scripts]
+zhituo-api = "app.cli:main"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
