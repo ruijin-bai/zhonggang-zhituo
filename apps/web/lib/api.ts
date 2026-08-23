@@ -2,24 +2,33 @@ import { demoOpportunities } from "./demo";
 import type { Opportunity, RadarOverview } from "./types";
 
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
+const ALLOW_DEMO_FALLBACK = process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK !== "false";
+
+function apiFailure(message: string, error: unknown): never {
+  console.error(`[Zhituo API] ${message}`, error);
+  throw new Error(`${message}。生产模式不会回退到 Demo 数据，请检查 API、数据库与运行环境。`);
+}
 
 export async function getOpportunities(): Promise<Opportunity[]> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/opportunities`, { next: { revalidate: 30 } });
-    if (!response.ok) throw new Error("API unavailable");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
-  } catch {
-    return demoOpportunities;
+  } catch (error) {
+    if (ALLOW_DEMO_FALLBACK) return demoOpportunities;
+    return apiFailure("机会池读取失败", error);
   }
 }
 
 export async function getOpportunity(id: string): Promise<Opportunity | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/opportunities/${id}`, { next: { revalidate: 30 } });
-    if (!response.ok) throw new Error("API unavailable");
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
-  } catch {
-    return demoOpportunities.find((item) => item.id === id) ?? null;
+  } catch (error) {
+    if (ALLOW_DEMO_FALLBACK) return demoOpportunities.find((item) => item.id === id) ?? null;
+    return apiFailure("机会详情读取失败", error);
   }
 }
 
@@ -63,9 +72,10 @@ function demoRadar(): RadarOverview {
 export async function getRadar(): Promise<RadarOverview> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/radar`, { next: { revalidate: 20 } });
-    if (!response.ok) throw new Error("API unavailable");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
-  } catch {
-    return demoRadar();
+  } catch (error) {
+    if (ALLOW_DEMO_FALLBACK) return demoRadar();
+    return apiFailure("市场雷达读取失败", error);
   }
 }
