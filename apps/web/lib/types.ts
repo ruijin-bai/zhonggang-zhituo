@@ -46,3 +46,39 @@ export type Opportunity = {
   next_actions: string[];
   is_demo: boolean;
 };
+
+export type CountryRadar = {
+  country: string;
+  region: string;
+  opportunity_count: number;
+  pending_draft_count: number;
+  source_count: number;
+  evidence_count: number;
+  high_grade_count: number;
+  average_score: number | null;
+  average_confidence: number | null;
+  total_value_usd_m: number | null;
+  activity_index: number;
+  attractiveness_index: number | null;
+  top_sectors: string[];
+};
+
+export type SectorRadar = {
+  sector: string;
+  opportunity_count: number;
+  high_grade_count: number;
+  average_score: number | null;
+  total_value_usd_m: number | null;
+};
+
+export type RadarOverview = {
+  opportunity_count: number;
+  pending_draft_count: number;
+  source_count: number;
+  evidence_count: number;
+  recent_event_count: number;
+  country_count: number;
+  countries: CountryRadar[];
+  sectors: SectorRadar[];
+  note: string;
+};
