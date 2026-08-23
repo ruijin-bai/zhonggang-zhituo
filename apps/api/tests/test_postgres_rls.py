@@ -73,10 +73,8 @@ def test_postgres_rls_blocks_cross_tenant_reads_for_runtime_role() -> None:
             session.commit()
 
         with admin_engine.begin() as connection:
-            connection.exec_driver_sql(
-                f'CREATE ROLE "{role}" LOGIN PASSWORD %s',
-                (password,),
-            )
+            # role/password are generated locally from a hex suffix, not user input.
+            connection.exec_driver_sql(f'CREATE ROLE "{role}" LOGIN PASSWORD \'{password}\'')
             role_created = True
             connection.exec_driver_sql(f'GRANT USAGE ON SCHEMA public TO "{role}"')
             connection.exec_driver_sql(f'GRANT SELECT ON TABLE opportunities TO "{role}"')
