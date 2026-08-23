@@ -9,22 +9,23 @@ from .db import get_db
 from .discovery import confirm_draft, discover
 from .ingestion import ingest_source
 from .models import AnalysisResult, ConfirmDraftRequest, ConfirmDraftResult, DiscoverRequest, DiscoverResult, IngestResult, Opportunity, SourceIngestRequest
+from .radar import BatchScanRequest, BatchScanResult, RadarOverview, batch_scan, get_radar
 from .repository import get_opportunity, list_opportunities
 from .scoring import calculate_score
 
 settings = get_settings()
-app = FastAPI(title="中港智拓 API", version="0.3.0")
+app = FastAPI(title="中港智拓 API", version="0.4.0")
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "zhituo-api", "version": "0.3.0"}
+    return {"status": "ok", "service": "zhituo-api", "version": "0.4.0"}
 
 
 @app.get("/api/meta")
 def meta() -> dict:
-    return {"version": "0.3.0", "data_backend": settings.data_backend, "ai_enabled": settings.ai_enabled, "ai_extraction_model": settings.ai_model_extraction if settings.ai_enabled else None, "ai_analysis_model": settings.ai_model_analysis if settings.ai_enabled else None}
+    return {"version": "0.4.0", "data_backend": settings.data_backend, "ai_enabled": settings.ai_enabled, "ai_extraction_model": settings.ai_model_extraction if settings.ai_enabled else None, "ai_analysis_model": settings.ai_model_analysis if settings.ai_enabled else None}
 
 
 @app.get("/api/opportunities", response_model=list[Opportunity])
@@ -47,6 +48,16 @@ def opportunity_score(opportunity_id: str, db: Session = Depends(get_db)) -> dic
         raise HTTPException(status_code=404, detail="Opportunity not found")
     result = calculate_score(item.breakdown, item.confidence)
     return {"opportunity_id": item.id, "total": result.total, "grade": result.grade, "decision": result.decision, "confidence": item.confidence, "breakdown": item.breakdown}
+
+
+@app.get("/api/radar", response_model=RadarOverview)
+def market_radar(db: Session = Depends(get_db)) -> RadarOverview:
+    return get_radar(db)
+
+
+@app.post("/api/discovery/batch", response_model=BatchScanResult)
+async def discovery_batch(request: BatchScanRequest, db: Session = Depends(get_db)) -> BatchScanResult:
+    return await batch_scan(request, db)
 
 
 @app.post("/api/sources/ingest", response_model=IngestResult)
