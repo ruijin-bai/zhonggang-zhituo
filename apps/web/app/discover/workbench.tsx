@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { runQueuedJob } from "@/lib/client-job";
 
 type Fact = { field_name: string; value: string; score_hint: number | null; evidence_quote: string; confidence: number };
 type Duplicate = { opportunity_id: string; title: string; country: string; similarity: number };
@@ -25,27 +26,46 @@ export default function DiscoveryWorkbench() {
   const [rank, setRank] = useState("B");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [confirmed, setConfirmed] = useState<ConfirmResult | null>(null);
+  const [confirmKey, setConfirmKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
 
   async function scan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLoading(true); setError(""); setResult(null); setConfirmed(null);
+    setLoading(true); setError(""); setResult(null); setConfirmed(null); setConfirmKey("");
     try {
-      const response = await fetch("/api/discover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: url || null, text: url ? null : text, source_title: url ? null : "西非港口连接通道项目公开信息", publisher, published_at: "2026-08-23", source_rank: rank, use_ai: true, is_demo: true }) });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail ?? "商机扫描失败");
-      setResult(payload);
+      const payload = {
+        url: url || null,
+        text: url ? null : text,
+        source_title: url ? null : "西非港口连接通道项目公开信息",
+        publisher,
+        published_at: "2026-08-23",
+        source_rank: rank,
+        use_ai: true,
+        is_demo: true,
+      };
+      const data = await runQueuedJob<ScanResult>("discovery.scan", payload);
+      setResult(data);
+      setConfirmKey(crypto.randomUUID());
     } catch (err) { setError(err instanceof Error ? err.message : "商机扫描失败"); }
     finally { setLoading(false); }
   }
 
   async function confirm() {
     if (!result) return;
+    const stableKey = confirmKey || crypto.randomUUID();
+    if (!confirmKey) setConfirmKey(stableKey);
     setConfirming(true); setError("");
     try {
-      const response = await fetch("/api/discover/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft_id: result.draft.id }) });
+      const response = await fetch("/api/discover/confirm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": stableKey,
+        },
+        body: JSON.stringify({ draft_id: result.draft.id }),
+      });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail ?? "确认入池失败");
       setConfirmed(payload);
@@ -62,7 +82,7 @@ export default function DiscoveryWorkbench() {
         <label className="form-field"><span>发布机构</span><input value={publisher} onChange={(e) => setPublisher(e.target.value)} /></label>
         <label className="form-field"><span>来源等级</span><select value={rank} onChange={(e) => setRank(e.target.value)}><option value="S">S · 政府/多边机构/招标文件</option><option value="A">A · 业主官网/正式公告</option><option value="B">B · 权威财经/行业媒体</option><option value="C">C · 一般媒体</option><option value="D">D · 未核实来源</option></select></label>
         <button className="primary-button" disabled={loading}>{loading ? "正在识别项目…" : "扫描并生成商机草稿"}</button>
-        <div className="policy-note">扫描不会直接创建正式项目。URL 抓取仅允许公开 http/https 地址，并拦截本机、内网和非文本资源。</div>
+        <div className="policy-note">扫描通过异步队列执行，不会占用 API 请求进程；URL 抓取仅允许公开 http/https 地址，并拦截本机、内网和非文本资源。</div>
       </form>
 
       <div className="stack">
