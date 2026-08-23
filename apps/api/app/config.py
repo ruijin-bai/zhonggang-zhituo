@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     celery_result_expires_seconds: int = 86400
     celery_task_soft_time_limit_seconds: int = 90
     celery_task_time_limit_seconds: int = 120
+    idempotency_ttl_seconds: int = 86400
+
+    # Observability.
+    log_level: str = "INFO"
+    request_id_header: str = "X-Request-ID"
+    correlation_id_header: str = "X-Correlation-ID"
 
     ai_base_url: str = "https://api.openai.com/v1"
     ai_api_key: str | None = None
@@ -36,6 +42,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def production_guardrails(self):
+        if self.idempotency_ttl_seconds < 60:
+            raise ValueError("IDEMPOTENCY_TTL_SECONDS must be at least 60")
         if self.app_env == "production":
             if self.data_backend != "database":
                 raise ValueError("production requires DATA_BACKEND=database")
