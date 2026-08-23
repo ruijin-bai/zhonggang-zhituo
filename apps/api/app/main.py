@@ -20,6 +20,8 @@ from .strategy import StrategyUpsert, StrategyWorkspace, get_strategy, save_stra
 from .strategy_ai import generate_strategy, red_team
 from .tracking import ActionCreate, TrackingBoard, WatchUpsert, add_action, complete_action, get_tracking_board, resolve_alert, watch_opportunity
 settings=get_settings(); app=FastAPI(title="中港智拓 API",version="0.10.0"); app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origin_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"]);app.include_router(admin_router);app.include_router(jobs_router)
+def _inline_only(job_endpoint:str)->None:
+ if settings.job_mode=="queue":raise HTTPException(status_code=409,detail=f"Queued execution required. Use {job_endpoint}")
 @app.get("/health")
 def health(): return {"status":"ok","service":"zhituo-api","version":"0.10.0","job_mode":settings.job_mode}
 @app.get("/api/meta")
@@ -44,12 +46,13 @@ def opportunity_battlecard(opportunity_id:str,db:Session=Depends(get_db),princip
 def market_radar(db:Session=Depends(get_db),principal:Principal=Depends(get_principal)): return get_radar(db)
 @app.post("/api/discovery/batch",response_model=BatchScanResult,deprecated=True)
 async def discovery_batch(request:BatchScanRequest,http_request:Request,db:Session=Depends(get_db),principal:Principal=Depends(require_role("analyst"))):
- result=await batch_scan(request,db);write_audit(db,principal=principal,action="discovery.batch.inline",resource_type="source",request=http_request,details={"scanned":result.scanned,"discovered":result.discovered});db.commit();return result
+ _inline_only("/api/jobs/discovery/batch");result=await batch_scan(request,db);write_audit(db,principal=principal,action="discovery.batch.inline",resource_type="source",request=http_request,details={"scanned":result.scanned,"discovered":result.discovered});db.commit();return result
 @app.post("/api/sources/ingest",response_model=IngestResult,deprecated=True)
 async def source_ingest(request:SourceIngestRequest,http_request:Request,db:Session=Depends(get_db),principal:Principal=Depends(require_role("analyst"))):
- result=await ingest_source(request,db);write_audit(db,principal=principal,action="source.ingest.inline",resource_type="opportunity",resource_id=request.opportunity_id,request=http_request,details={"persisted":result.persisted,"mode":result.extraction_mode,"applied_fields":result.applied_fields});db.commit();return result
+ _inline_only("/api/jobs/sources/ingest");result=await ingest_source(request,db);write_audit(db,principal=principal,action="source.ingest.inline",resource_type="opportunity",resource_id=request.opportunity_id,request=http_request,details={"persisted":result.persisted,"mode":result.extraction_mode,"applied_fields":result.applied_fields});db.commit();return result
 @app.post("/api/discovery/scan",response_model=DiscoverResult,deprecated=True)
 async def discovery_scan(request:DiscoverRequest,http_request:Request,db:Session=Depends(get_db),principal:Principal=Depends(require_role("analyst"))):
+ _inline_only("/api/jobs/discovery/scan")
  try:
   result=await discover(request,db);write_audit(db,principal=principal,action="discovery.scan.inline",resource_type="draft",resource_id=result.draft.id,request=http_request,details={"persisted":result.draft.persisted});db.commit();return result
  except (ValueError,httpx.HTTPError) as exc: raise HTTPException(400,str(exc)) from exc
@@ -89,18 +92,18 @@ def pursuit_strategy_update(opportunity_id:str,request:StrategyUpsert,http_reque
  try:
   result=save_strategy(opportunity_id,request,db);write_audit(db,principal=principal,action="strategy.update",resource_type="opportunity",resource_id=opportunity_id,request=http_request);db.commit();return result
  except ValueError as exc:raise HTTPException(400,str(exc)) from exc
-@app.post("/api/opportunities/{opportunity_id}/strategy/generate")
+@app.post("/api/opportunities/{opportunity_id}/strategy/generate",deprecated=True)
 async def pursuit_strategy_generate(opportunity_id:str,db:Session=Depends(get_db),principal:Principal=Depends(require_role("analyst"))):
- item=get_opportunity(opportunity_id,db)
+ _inline_only(f"/api/jobs/opportunities/{opportunity_id}/strategy/generate");item=get_opportunity(opportunity_id,db)
  if not item:raise HTTPException(404,"Opportunity not found")
  draft,mode=await generate_strategy(item); return {"mode":mode,"draft":draft}
-@app.post("/api/opportunities/{opportunity_id}/strategy/red-team")
+@app.post("/api/opportunities/{opportunity_id}/strategy/red-team",deprecated=True)
 async def pursuit_strategy_red_team(opportunity_id:str,db:Session=Depends(get_db),principal:Principal=Depends(require_role("analyst"))):
- item=get_opportunity(opportunity_id,db)
+ _inline_only(f"/api/jobs/opportunities/{opportunity_id}/strategy/red-team");item=get_opportunity(opportunity_id,db)
  if not item:raise HTTPException(404,"Opportunity not found")
  workspace=get_strategy(opportunity_id,db); challenge,mode=await red_team(item,workspace.strategy); return {"mode":mode,"challenge":challenge}
 @app.post("/api/opportunities/{opportunity_id}/analyze",deprecated=True)
 async def analyze_opportunity(opportunity_id:str,db:Session=Depends(get_db),principal:Principal=Depends(require_role("analyst"))):
- item=get_opportunity(opportunity_id,db)
+ _inline_only(f"/api/jobs/opportunities/{opportunity_id}/analyze");item=get_opportunity(opportunity_id,db)
  if not item:raise HTTPException(404,"Opportunity not found")
  analysis,mode=await AIService().analyze(item); return {"mode":mode,"opportunity_id":item.id,"analysis":AnalysisResult.model_validate(analysis)}
