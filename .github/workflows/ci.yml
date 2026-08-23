@@ -31,6 +31,7 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379/0
       DEMO_MODE: "true"
       ALLOW_DEMO_FALLBACK: "true"
+      AUTH_MODE: development_header
     services:
       postgres:
         image: postgres:17-alpine
@@ -78,3 +79,12 @@ jobs:
         run: |
           zhituo-api reset-demo
           zhituo-api status
+
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API production image
+        run: docker build --pull -t zhituo-api:ci apps/api
+      - name: Build Web production image
+        run: docker build --pull -t zhituo-web:ci apps/web
