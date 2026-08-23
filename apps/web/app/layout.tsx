@@ -9,27 +9,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-CN">
-      <body>
-        <div className="app-shell">
-          <aside className="sidebar">
-            <div className="brand">
-              <div className="brand-mark">智</div>
-              <div><strong>中港智拓</strong><span>ZHITUO</span></div>
-            </div>
-            <nav>
-              <Link href="/">经营总览</Link>
-              <Link href="/radar">市场雷达</Link>
-              <Link href="/discover">商机发现</Link>
-              <Link href="/intelligence">情报重评</Link>
-              <Link href="/opportunities">机会池</Link>
-              <Link href="/tracking">重点跟踪</Link>
-            </nav>
-            <div className="sidebar-foot">去哪里 · 追什么 · 怎么拿</div>
-          </aside>
-          <main className="main-content">{children}</main>
-        </div>
-      </body>
-    </html>
+    <html lang="zh-CN"><body><div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand"><div className="brand-mark">智</div><div><strong>中港智拓</strong><span>ZHITUO</span></div></div>
+        <nav>
+          <Link href="/">经营总览</Link><Link href="/radar">市场雷达</Link><Link href="/discover">商机发现</Link><Link href="/intelligence">情报重评</Link><Link href="/opportunities">机会池</Link><Link href="/tracking">重点跟踪</Link><Link href="/strategy">赢标策略</Link>
+        </nav>
+        <div className="sidebar-foot">去哪里 · 追什么 · 怎么拿</div>
+      </aside>
+      <main className="main-content">{children}</main>
+    </div></body></html>
   );
 }
