@@ -12,20 +12,21 @@ from .models import AnalysisResult, ConfirmDraftRequest, ConfirmDraftResult, Dis
 from .radar import BatchScanRequest, BatchScanResult, RadarOverview, batch_scan, get_radar
 from .repository import get_opportunity, list_opportunities
 from .scoring import calculate_score
+from .tracking import ActionCreate, TrackingBoard, WatchUpsert, add_action, complete_action, get_tracking_board, resolve_alert, watch_opportunity
 
 settings = get_settings()
-app = FastAPI(title="中港智拓 API", version="0.4.0")
+app = FastAPI(title="中港智拓 API", version="0.5.0")
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "zhituo-api", "version": "0.4.0"}
+    return {"status": "ok", "service": "zhituo-api", "version": "0.5.0"}
 
 
 @app.get("/api/meta")
 def meta() -> dict:
-    return {"version": "0.4.0", "data_backend": settings.data_backend, "ai_enabled": settings.ai_enabled, "ai_extraction_model": settings.ai_model_extraction if settings.ai_enabled else None, "ai_analysis_model": settings.ai_model_analysis if settings.ai_enabled else None}
+    return {"version": "0.5.0", "data_backend": settings.data_backend, "ai_enabled": settings.ai_enabled, "ai_extraction_model": settings.ai_model_extraction if settings.ai_enabled else None, "ai_analysis_model": settings.ai_model_analysis if settings.ai_enabled else None}
 
 
 @app.get("/api/opportunities", response_model=list[Opportunity])
@@ -36,16 +37,14 @@ def opportunities(db: Session = Depends(get_db)) -> list[Opportunity]:
 @app.get("/api/opportunities/{opportunity_id}", response_model=Opportunity)
 def opportunity_detail(opportunity_id: str, db: Session = Depends(get_db)) -> Opportunity:
     item = get_opportunity(opportunity_id, db)
-    if not item:
-        raise HTTPException(status_code=404, detail="Opportunity not found")
+    if not item: raise HTTPException(status_code=404, detail="Opportunity not found")
     return item
 
 
 @app.get("/api/opportunities/{opportunity_id}/score")
 def opportunity_score(opportunity_id: str, db: Session = Depends(get_db)) -> dict:
     item = get_opportunity(opportunity_id, db)
-    if not item:
-        raise HTTPException(status_code=404, detail="Opportunity not found")
+    if not item: raise HTTPException(status_code=404, detail="Opportunity not found")
     result = calculate_score(item.breakdown, item.confidence)
     return {"opportunity_id": item.id, "total": result.total, "grade": result.grade, "decision": result.decision, "confidence": item.confidence, "breakdown": item.breakdown}
 
@@ -53,6 +52,35 @@ def opportunity_score(opportunity_id: str, db: Session = Depends(get_db)) -> dic
 @app.get("/api/radar", response_model=RadarOverview)
 def market_radar(db: Session = Depends(get_db)) -> RadarOverview:
     return get_radar(db)
+
+
+@app.get("/api/tracking", response_model=TrackingBoard)
+def pursuit_tracking(db: Session = Depends(get_db)) -> TrackingBoard:
+    return get_tracking_board(db)
+
+
+@app.put("/api/tracking/{opportunity_id}/watch")
+def pursuit_watch(opportunity_id: str, payload: WatchUpsert, db: Session = Depends(get_db)) -> dict:
+    try: return watch_opportunity(opportunity_id, payload, db)
+    except ValueError as exc: raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/tracking/{opportunity_id}/actions")
+def pursuit_action(opportunity_id: str, payload: ActionCreate, db: Session = Depends(get_db)) -> dict:
+    try: return add_action(opportunity_id, payload, db)
+    except ValueError as exc: raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/tracking/actions/{action_id}/complete")
+def pursuit_action_complete(action_id: int, db: Session = Depends(get_db)) -> dict:
+    try: return complete_action(action_id, db)
+    except ValueError as exc: raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/tracking/alerts/{alert_id}/resolve")
+def pursuit_alert_resolve(alert_id: int, db: Session = Depends(get_db)) -> dict:
+    try: return resolve_alert(alert_id, db)
+    except ValueError as exc: raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/discovery/batch", response_model=BatchScanResult)
@@ -67,24 +95,19 @@ async def source_ingest(request: SourceIngestRequest, db: Session = Depends(get_
 
 @app.post("/api/discovery/scan", response_model=DiscoverResult)
 async def discovery_scan(request: DiscoverRequest, db: Session = Depends(get_db)) -> DiscoverResult:
-    try:
-        return await discover(request, db)
-    except (ValueError, httpx.HTTPError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try: return await discover(request, db)
+    except (ValueError, httpx.HTTPError) as exc: raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/discovery/drafts/{draft_id}/confirm", response_model=ConfirmDraftResult)
 def discovery_confirm(draft_id: str, request: ConfirmDraftRequest, db: Session = Depends(get_db)) -> ConfirmDraftResult:
-    try:
-        return confirm_draft(draft_id, request, db)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try: return confirm_draft(draft_id, request, db)
+    except ValueError as exc: raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/opportunities/{opportunity_id}/analyze")
 async def analyze_opportunity(opportunity_id: str, db: Session = Depends(get_db)) -> dict:
     item = get_opportunity(opportunity_id, db)
-    if not item:
-        raise HTTPException(status_code=404, detail="Opportunity not found")
+    if not item: raise HTTPException(status_code=404, detail="Opportunity not found")
     analysis, mode = await AIService().analyze(item)
     return {"mode": mode, "opportunity_id": item.id, "analysis": AnalysisResult.model_validate(analysis)}
