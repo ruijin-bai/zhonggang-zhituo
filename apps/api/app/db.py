@@ -69,6 +69,23 @@ class AuditLogRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
 
+class IdempotencyRecord(TenantScopedMixin, Base):
+    __tablename__ = "idempotency_records"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "scope", "key_hash", name="uq_idempotency_org_scope_key"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key_hash: Mapped[str] = mapped_column(String(64))
+    scope: Mapped[str] = mapped_column(String(160))
+    request_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    response_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    response_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class OpportunityRecord(TenantScopedMixin, Base):
     __tablename__ = "opportunities"
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
@@ -210,6 +227,7 @@ class PursuitAlertRecord(TenantScopedMixin, Base):
 
 
 TENANT_MODELS = (
+    IdempotencyRecord,
     OpportunityRecord,
     SourceRecord,
     EvidenceRecord,
