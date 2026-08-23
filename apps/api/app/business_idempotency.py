@@ -83,7 +83,7 @@ def _interpret_existing(record: IdempotencyRecord, request_hash: str) -> Idempot
         )
     raise HTTPException(
         status_code=409,
-        detail="An operation with this Idempotency-Key is already in progress",
+        detail="An operation with this Idempotency-Key is already in progress or has uncertain completion state",
     )
 
 
@@ -111,7 +111,9 @@ def begin_operation(
         )
     )
     if existing is not None:
-        if existing.expires_at <= now:
+        # Only a known-completed response may age out automatically. Pending/failed records
+        # represent uncertain side effects and require explicit operator review rather than replay.
+        if existing.status == "completed" and existing.expires_at <= now:
             session.delete(existing)
             session.commit()
         else:
@@ -165,8 +167,6 @@ def complete_operation(
 def fail_operation(session: Session, handle: IdempotencyHandle, detail: str) -> None:
     if handle.record_id is None:
         return
-    # The business operation may have left the Session in a failed transaction state.
-    # Roll back uncommitted work before persisting the conservative failed marker.
     session.rollback()
     record = session.get(IdempotencyRecord, handle.record_id)
     if record is None:
