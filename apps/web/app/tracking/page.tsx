@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getDemoTrackingBoard } from "@/lib/demo-operating";
+import { DEMO_FALLBACK_ALLOWED, getDemoTrackingBoard } from "@/lib/demo-operating";
 
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
 
@@ -8,7 +8,8 @@ async function getBoard() {
     const response = await fetch(`${API_BASE_URL}/api/tracking`, { cache: "no-store" });
     if (!response.ok) throw new Error("tracking unavailable");
     return await response.json();
-  } catch {
+  } catch (error) {
+    if (!DEMO_FALLBACK_ALLOWED) throw error;
     return getDemoTrackingBoard();
   }
 }
