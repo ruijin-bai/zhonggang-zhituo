@@ -18,10 +18,16 @@ def _json(model):
     return model.model_dump(mode="json") if hasattr(model, "model_dump") else model
 
 
+def _tenant_session(organization_id: str):
+    session = SessionLocal()
+    session.info["organization_id"] = organization_id
+    return session
+
+
 @celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.discovery.scan")
-def discovery_scan_task(self, payload: dict) -> dict:
+def discovery_scan_task(self, payload: dict, organization_id: str) -> dict:
     try:
-        with SessionLocal() as session:
+        with _tenant_session(organization_id) as session:
             result = asyncio.run(discover(DiscoverRequest.model_validate(payload), session))
             return _json(result)
     except SoftTimeLimitExceeded as exc:
@@ -29,9 +35,9 @@ def discovery_scan_task(self, payload: dict) -> dict:
 
 
 @celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.discovery.batch")
-def discovery_batch_task(self, payload: dict) -> dict:
+def discovery_batch_task(self, payload: dict, organization_id: str) -> dict:
     try:
-        with SessionLocal() as session:
+        with _tenant_session(organization_id) as session:
             result = asyncio.run(batch_scan(BatchScanRequest.model_validate(payload), session))
             return _json(result)
     except SoftTimeLimitExceeded as exc:
@@ -39,9 +45,9 @@ def discovery_batch_task(self, payload: dict) -> dict:
 
 
 @celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.source.ingest")
-def source_ingest_task(self, payload: dict) -> dict:
+def source_ingest_task(self, payload: dict, organization_id: str) -> dict:
     try:
-        with SessionLocal() as session:
+        with _tenant_session(organization_id) as session:
             result = asyncio.run(ingest_source(SourceIngestRequest.model_validate(payload), session))
             return _json(result)
     except SoftTimeLimitExceeded as exc:
@@ -49,9 +55,9 @@ def source_ingest_task(self, payload: dict) -> dict:
 
 
 @celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 2}, name="zhituo.opportunity.analyze")
-def opportunity_analyze_task(self, opportunity_id: str) -> dict:
+def opportunity_analyze_task(self, opportunity_id: str, organization_id: str) -> dict:
     try:
-        with SessionLocal() as session:
+        with _tenant_session(organization_id) as session:
             item = get_opportunity(opportunity_id, session)
             if item is None:
                 raise ValueError("Opportunity not found")
@@ -62,9 +68,9 @@ def opportunity_analyze_task(self, opportunity_id: str) -> dict:
 
 
 @celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 2}, name="zhituo.strategy.generate")
-def strategy_generate_task(self, opportunity_id: str) -> dict:
+def strategy_generate_task(self, opportunity_id: str, organization_id: str) -> dict:
     try:
-        with SessionLocal() as session:
+        with _tenant_session(organization_id) as session:
             item = get_opportunity(opportunity_id, session)
             if item is None:
                 raise ValueError("Opportunity not found")
@@ -75,9 +81,9 @@ def strategy_generate_task(self, opportunity_id: str) -> dict:
 
 
 @celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 2}, name="zhituo.strategy.red_team")
-def strategy_red_team_task(self, opportunity_id: str) -> dict:
+def strategy_red_team_task(self, opportunity_id: str, organization_id: str) -> dict:
     try:
-        with SessionLocal() as session:
+        with _tenant_session(organization_id) as session:
             item = get_opportunity(opportunity_id, session)
             if item is None:
                 raise ValueError("Opportunity not found")
