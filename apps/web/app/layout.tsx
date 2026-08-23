@@ -23,7 +23,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <Link href="/discover">商机发现</Link>
               <Link href="/intelligence">情报重评</Link>
               <Link href="/opportunities">机会池</Link>
-              <span className="nav-disabled">重点跟踪 · 即将接入</span>
+              <Link href="/tracking">重点跟踪</Link>
             </nav>
             <div className="sidebar-foot">去哪里 · 追什么 · 怎么拿</div>
           </aside>
