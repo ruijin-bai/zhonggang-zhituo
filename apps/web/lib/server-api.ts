@@ -4,12 +4,19 @@ import { headers } from "next/headers";
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
 const API_AUTH_MODE = process.env.API_AUTH_MODE ?? "development_header";
 
+type NextFetchInit = RequestInit & {
+  next?: {
+    revalidate?: number | false;
+    tags?: string[];
+  };
+};
+
 function copyIfPresent(source: Headers, target: Headers, name: string) {
   const value = source.get(name);
   if (value) target.set(name, value);
 }
 
-export async function serverApiFetch(path: string, init: RequestInit = {}) {
+export async function serverApiFetch(path: string, init: NextFetchInit = {}) {
   const incoming = await headers();
   const outgoing = new Headers(init.headers);
 
