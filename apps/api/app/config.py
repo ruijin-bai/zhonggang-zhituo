@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,11 +15,13 @@ class Settings(BaseSettings):
     allow_demo_fallback: bool = True
     dev_user_email: str = "admin@zhituo.local"
 
-    # Authentication. Development/test may use a local identity header. Production must
-    # receive identity from an authenticated reverse proxy / enterprise SSO gateway and
-    # verify a shared gateway secret before trusting identity headers.
-    auth_mode: Literal["development_header", "trusted_proxy"] = "development_header"
+    # Identity: development header, trusted enterprise gateway, or direct OIDC JWT.
+    auth_mode: Literal["development_header", "trusted_proxy", "oidc"] = "development_header"
     auth_proxy_secret: str | None = None
+    oidc_issuer: str = ""
+    oidc_audience: str = ""
+    oidc_jwks_url: str = ""
+    oidc_email_claim: str = "email"
 
     job_mode: Literal["inline", "queue"] = "inline"
     redis_url: str = "redis://127.0.0.1:6379/0"
@@ -32,6 +35,14 @@ class Settings(BaseSettings):
     request_id_header: str = "X-Request-ID"
     correlation_id_header: str = "X-Correlation-ID"
 
+    # HTTP/application security. The ingress must still enforce independent limits.
+    max_request_body_bytes: int = 2_000_000
+    security_headers_enabled: bool = True
+    hsts_max_age_seconds: int = 31_536_000
+
+    # Database-side tenant isolation.
+    database_rls_enabled: bool = True
+
     ai_base_url: str = "https://api.openai.com/v1"
     ai_api_key: str | None = None
     ai_model_extraction: str = ""
@@ -40,10 +51,18 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    @staticmethod
+    def _is_https_url(value: str) -> bool:
+        parsed = urlparse(value)
+        return parsed.scheme == "https" and bool(parsed.netloc)
+
     @model_validator(mode="after")
     def production_guardrails(self):
         if self.idempotency_ttl_seconds < 60:
             raise ValueError("IDEMPOTENCY_TTL_SECONDS must be at least 60")
+        if self.max_request_body_bytes < 64_000 or self.max_request_body_bytes > 20_000_000:
+            raise ValueError("MAX_REQUEST_BODY_BYTES must be between 64000 and 20000000")
+
         if self.app_env == "production":
             if self.data_backend != "database":
                 raise ValueError("production requires DATA_BACKEND=database")
@@ -53,10 +72,20 @@ class Settings(BaseSettings):
                 raise ValueError("production requires ALLOW_DEMO_FALLBACK=false")
             if self.job_mode != "queue":
                 raise ValueError("production requires JOB_MODE=queue")
-            if self.auth_mode != "trusted_proxy":
-                raise ValueError("production requires AUTH_MODE=trusted_proxy")
-            if not self.auth_proxy_secret or len(self.auth_proxy_secret) < 32:
-                raise ValueError("production requires AUTH_PROXY_SECRET with at least 32 characters")
+            if self.auth_mode == "development_header":
+                raise ValueError("production requires AUTH_MODE=trusted_proxy or oidc")
+            if self.auth_mode == "trusted_proxy":
+                if not self.auth_proxy_secret or len(self.auth_proxy_secret) < 32:
+                    raise ValueError("trusted_proxy requires AUTH_PROXY_SECRET with at least 32 characters")
+            if self.auth_mode == "oidc":
+                if not self.oidc_issuer or not self._is_https_url(self.oidc_issuer):
+                    raise ValueError("oidc production mode requires HTTPS OIDC_ISSUER")
+                if not self.oidc_audience:
+                    raise ValueError("oidc production mode requires OIDC_AUDIENCE")
+                if not self.oidc_jwks_url or not self._is_https_url(self.oidc_jwks_url):
+                    raise ValueError("oidc production mode requires HTTPS OIDC_JWKS_URL")
+            if not self.database_rls_enabled:
+                raise ValueError("production requires DATABASE_RLS_ENABLED=true")
             if "127.0.0.1" in self.database_url or "localhost" in self.database_url:
                 raise ValueError("production DATABASE_URL must point to an explicit production database service")
             if "127.0.0.1" in self.redis_url or "localhost" in self.redis_url:
