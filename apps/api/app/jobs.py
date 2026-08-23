@@ -1,14 +1,28 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from collections.abc import Sequence
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from .audit import write_audit
 from .db import get_db
-from .job_registry import job_snapshot, register_job
+from .job_registry import (
+    job_snapshot,
+    register_job,
+    release_job_reservation,
+    reserve_job_id,
+)
 from .models import DiscoverRequest, SourceIngestRequest
 from .radar import BatchScanRequest
 from .security import Principal, require_role
-from .tasks import discovery_batch_task, discovery_scan_task, opportunity_analyze_task, source_ingest_task, strategy_generate_task, strategy_red_team_task
+from .tasks import (
+    discovery_batch_task,
+    discovery_scan_task,
+    opportunity_analyze_task,
+    source_ingest_task,
+    strategy_generate_task,
+    strategy_red_team_task,
+)
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -18,56 +32,219 @@ class JobSubmission(BaseModel):
     job_type: str
     state: str = "PENDING"
     status_url: str
+    replayed: bool = False
 
 
-def _submitted(task, *, job_type: str, principal: Principal, resource_id: str | None = None) -> JobSubmission:
-    register_job(task.id, principal=principal, job_type=job_type, resource_id=resource_id)
-    return JobSubmission(job_id=task.id, job_type=job_type, status_url=f"/api/jobs/{task.id}")
+def _request_context(request: Request) -> tuple[str | None, str | None]:
+    return (
+        getattr(request.state, "request_id", None),
+        getattr(request.state, "correlation_id", None),
+    )
 
 
-def _audit_submission(db: Session, request: Request, principal: Principal, result: JobSubmission, details: dict | None = None) -> None:
-    write_audit(db, principal=principal, action="job.submit", resource_type="job", resource_id=result.job_id, request=request, details={"job_type": result.job_type, **(details or {})})
+def _enqueue(
+    task,
+    *,
+    args: Sequence,
+    job_type: str,
+    principal: Principal,
+    request: Request,
+    idempotency_key: str | None,
+    resource_id: str | None = None,
+) -> JobSubmission:
+    try:
+        job_id, replayed = reserve_job_id(
+            principal=principal,
+            job_type=job_type,
+            idempotency_key=idempotency_key,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    request_id, correlation_id = _request_context(request)
+    if replayed:
+        return JobSubmission(
+            job_id=job_id,
+            job_type=job_type,
+            status_url=f"/api/jobs/{job_id}",
+            replayed=True,
+        )
+
+    try:
+        task.apply_async(
+            args=list(args),
+            task_id=job_id,
+            headers={
+                "request_id": request_id,
+                "correlation_id": correlation_id,
+                "organization_id": principal.organization_id,
+            },
+        )
+        register_job(
+            job_id,
+            principal=principal,
+            job_type=job_type,
+            resource_id=resource_id,
+            request_id=request_id,
+            correlation_id=correlation_id,
+            idempotency_key=idempotency_key,
+        )
+    except Exception:
+        release_job_reservation(
+            principal=principal,
+            job_type=job_type,
+            idempotency_key=idempotency_key,
+            job_id=job_id,
+        )
+        raise
+
+    return JobSubmission(
+        job_id=job_id,
+        job_type=job_type,
+        status_url=f"/api/jobs/{job_id}",
+        replayed=False,
+    )
+
+
+def _audit_submission(
+    db: Session,
+    request: Request,
+    principal: Principal,
+    result: JobSubmission,
+    details: dict | None = None,
+) -> None:
+    write_audit(
+        db,
+        principal=principal,
+        action="job.replay" if result.replayed else "job.submit",
+        resource_type="job",
+        resource_id=result.job_id,
+        request=request,
+        details={"job_type": result.job_type, "replayed": result.replayed, **(details or {})},
+    )
     db.commit()
 
 
 @router.post("/discovery/scan", response_model=JobSubmission, status_code=202)
-def submit_discovery_scan(body: DiscoverRequest, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(discovery_scan_task.delay(body.model_dump(mode="json"), principal.organization_id), job_type="discovery.scan", principal=principal)
+def submit_discovery_scan(
+    body: DiscoverRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_role("analyst")),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> JobSubmission:
+    result = _enqueue(
+        discovery_scan_task,
+        args=(body.model_dump(mode="json"), principal.organization_id),
+        job_type="discovery.scan",
+        principal=principal,
+        request=request,
+        idempotency_key=idempotency_key,
+    )
     _audit_submission(db, request, principal, result)
     return result
 
 
 @router.post("/discovery/batch", response_model=JobSubmission, status_code=202)
-def submit_discovery_batch(body: BatchScanRequest, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(discovery_batch_task.delay(body.model_dump(mode="json"), principal.organization_id), job_type="discovery.batch", principal=principal)
+def submit_discovery_batch(
+    body: BatchScanRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_role("analyst")),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> JobSubmission:
+    result = _enqueue(
+        discovery_batch_task,
+        args=(body.model_dump(mode="json"), principal.organization_id),
+        job_type="discovery.batch",
+        principal=principal,
+        request=request,
+        idempotency_key=idempotency_key,
+    )
     _audit_submission(db, request, principal, result, {"items": len(body.items)})
     return result
 
 
 @router.post("/sources/ingest", response_model=JobSubmission, status_code=202)
-def submit_source_ingest(body: SourceIngestRequest, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(source_ingest_task.delay(body.model_dump(mode="json"), principal.organization_id), job_type="source.ingest", principal=principal, resource_id=body.opportunity_id)
+def submit_source_ingest(
+    body: SourceIngestRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_role("analyst")),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> JobSubmission:
+    result = _enqueue(
+        source_ingest_task,
+        args=(body.model_dump(mode="json"), principal.organization_id),
+        job_type="source.ingest",
+        principal=principal,
+        request=request,
+        idempotency_key=idempotency_key,
+        resource_id=body.opportunity_id,
+    )
     _audit_submission(db, request, principal, result, {"opportunity_id": body.opportunity_id})
     return result
 
 
 @router.post("/opportunities/{opportunity_id}/analyze", response_model=JobSubmission, status_code=202)
-def submit_analysis(opportunity_id: str, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(opportunity_analyze_task.delay(opportunity_id, principal.organization_id), job_type="opportunity.analyze", principal=principal, resource_id=opportunity_id)
+def submit_analysis(
+    opportunity_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_role("analyst")),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> JobSubmission:
+    result = _enqueue(
+        opportunity_analyze_task,
+        args=(opportunity_id, principal.organization_id),
+        job_type="opportunity.analyze",
+        principal=principal,
+        request=request,
+        idempotency_key=idempotency_key,
+        resource_id=opportunity_id,
+    )
     _audit_submission(db, request, principal, result, {"opportunity_id": opportunity_id})
     return result
 
 
 @router.post("/opportunities/{opportunity_id}/strategy/generate", response_model=JobSubmission, status_code=202)
-def submit_strategy_generate(opportunity_id: str, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(strategy_generate_task.delay(opportunity_id, principal.organization_id), job_type="strategy.generate", principal=principal, resource_id=opportunity_id)
+def submit_strategy_generate(
+    opportunity_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_role("analyst")),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> JobSubmission:
+    result = _enqueue(
+        strategy_generate_task,
+        args=(opportunity_id, principal.organization_id),
+        job_type="strategy.generate",
+        principal=principal,
+        request=request,
+        idempotency_key=idempotency_key,
+        resource_id=opportunity_id,
+    )
     _audit_submission(db, request, principal, result, {"opportunity_id": opportunity_id})
     return result
 
 
 @router.post("/opportunities/{opportunity_id}/strategy/red-team", response_model=JobSubmission, status_code=202)
-def submit_strategy_red_team(opportunity_id: str, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(strategy_red_team_task.delay(opportunity_id, principal.organization_id), job_type="strategy.red_team", principal=principal, resource_id=opportunity_id)
+def submit_strategy_red_team(
+    opportunity_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_role("analyst")),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> JobSubmission:
+    result = _enqueue(
+        strategy_red_team_task,
+        args=(opportunity_id, principal.organization_id),
+        job_type="strategy.red_team",
+        principal=principal,
+        request=request,
+        idempotency_key=idempotency_key,
+        resource_id=opportunity_id,
+    )
     _audit_submission(db, request, principal, result, {"opportunity_id": opportunity_id})
     return result
 
