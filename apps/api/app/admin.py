@@ -6,9 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import AuditLogRecord, get_db
+from .health import router as health_router
 from .security import Principal, get_principal, require_role
 
 router = APIRouter(prefix="/api", tags=["identity"])
+router.include_router(health_router)
 
 
 class MeResponse(BaseModel):
