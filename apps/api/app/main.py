@@ -10,6 +10,7 @@ from .config import get_settings
 from .db import get_db
 from .discovery import confirm_draft, discover
 from .ingestion import ingest_source
+from .jobs import router as jobs_router
 from .models import AnalysisResult, ConfirmDraftRequest, ConfirmDraftResult, DiscoverRequest, DiscoverResult, IngestResult, Opportunity, SourceIngestRequest
 from .radar import BatchScanRequest, BatchScanResult, RadarOverview, batch_scan, get_radar
 from .repository import get_opportunity, list_opportunities
@@ -18,11 +19,11 @@ from .security import Principal, get_principal, require_role
 from .strategy import StrategyUpsert, StrategyWorkspace, get_strategy, save_strategy
 from .strategy_ai import generate_strategy, red_team
 from .tracking import ActionCreate, TrackingBoard, WatchUpsert, add_action, complete_action, get_tracking_board, resolve_alert, watch_opportunity
-settings=get_settings(); app=FastAPI(title="中港智拓 API",version="0.9.0"); app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origin_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"]);app.include_router(admin_router)
+settings=get_settings(); app=FastAPI(title="中港智拓 API",version="0.10.0"); app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origin_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"]);app.include_router(admin_router);app.include_router(jobs_router)
 @app.get("/health")
-def health(): return {"status":"ok","service":"zhituo-api","version":"0.9.0"}
+def health(): return {"status":"ok","service":"zhituo-api","version":"0.10.0","job_mode":settings.job_mode}
 @app.get("/api/meta")
-def meta(principal:Principal=Depends(get_principal)): return {"version":"0.9.0","data_backend":settings.data_backend,"ai_enabled":settings.ai_enabled,"organization":principal.organization_name,"role":principal.role}
+def meta(principal:Principal=Depends(get_principal)): return {"version":"0.10.0","data_backend":settings.data_backend,"job_mode":settings.job_mode,"ai_enabled":settings.ai_enabled,"organization":principal.organization_name,"role":principal.role}
 @app.get("/api/opportunities",response_model=list[Opportunity])
 def opportunities(db:Session=Depends(get_db),principal:Principal=Depends(get_principal)): return list_opportunities(db)
 @app.get("/api/opportunities/{opportunity_id}",response_model=Opportunity)
@@ -41,16 +42,16 @@ def opportunity_battlecard(opportunity_id:str,db:Session=Depends(get_db),princip
  except ValueError as exc:raise HTTPException(404,str(exc)) from exc
 @app.get("/api/radar",response_model=RadarOverview)
 def market_radar(db:Session=Depends(get_db),principal:Principal=Depends(get_principal)): return get_radar(db)
-@app.post("/api/discovery/batch",response_model=BatchScanResult)
+@app.post("/api/discovery/batch",response_model=BatchScanResult,deprecated=True)
 async def discovery_batch(request:BatchScanRequest,http_request:Request,db:Session=Depends(get_db),principal:Principal=Depends(require_role("analyst"))):
- result=await batch_scan(request,db);write_audit(db,principal=principal,action="discovery.batch",resource_type="source",request=http_request,details={"scanned":result.scanned,"discovered":result.discovered});db.commit();return result
-@app.post("/api/sources/ingest",response_model=IngestResult)
+ result=await batch_scan(request,db);write_audit(db,principal=principal,action="discovery.batch.inline",resource_type="source",request=http_request,details={"scanned":result.scanned,"discovered":result.discovered});db.commit();return result
+@app.post("/api/sources/ingest",response_model=IngestResult,deprecated=True)
 async def source_ingest(request:SourceIngestRequest,http_request:Request,db:Session=Depends(get_db),principal:Principal=Depends(require_role("analyst"))):
- result=await ingest_source(request,db);write_audit(db,principal=principal,action="source.ingest",resource_type="opportunity",resource_id=request.opportunity_id,request=http_request,details={"persisted":result.persisted,"mode":result.extraction_mode,"applied_fields":result.applied_fields});db.commit();return result
-@app.post("/api/discovery/scan",response_model=DiscoverResult)
+ result=await ingest_source(request,db);write_audit(db,principal=principal,action="source.ingest.inline",resource_type="opportunity",resource_id=request.opportunity_id,request=http_request,details={"persisted":result.persisted,"mode":result.extraction_mode,"applied_fields":result.applied_fields});db.commit();return result
+@app.post("/api/discovery/scan",response_model=DiscoverResult,deprecated=True)
 async def discovery_scan(request:DiscoverRequest,http_request:Request,db:Session=Depends(get_db),principal:Principal=Depends(require_role("analyst"))):
  try:
-  result=await discover(request,db);write_audit(db,principal=principal,action="discovery.scan",resource_type="draft",resource_id=result.draft.id,request=http_request,details={"persisted":result.draft.persisted});db.commit();return result
+  result=await discover(request,db);write_audit(db,principal=principal,action="discovery.scan.inline",resource_type="draft",resource_id=result.draft.id,request=http_request,details={"persisted":result.draft.persisted});db.commit();return result
  except (ValueError,httpx.HTTPError) as exc: raise HTTPException(400,str(exc)) from exc
 @app.post("/api/discovery/drafts/{draft_id}/confirm",response_model=ConfirmDraftResult)
 def discovery_confirm(draft_id:str,request:ConfirmDraftRequest,http_request:Request,db:Session=Depends(get_db),principal:Principal=Depends(require_role("manager"))):
@@ -98,7 +99,7 @@ async def pursuit_strategy_red_team(opportunity_id:str,db:Session=Depends(get_db
  item=get_opportunity(opportunity_id,db)
  if not item:raise HTTPException(404,"Opportunity not found")
  workspace=get_strategy(opportunity_id,db); challenge,mode=await red_team(item,workspace.strategy); return {"mode":mode,"challenge":challenge}
-@app.post("/api/opportunities/{opportunity_id}/analyze")
+@app.post("/api/opportunities/{opportunity_id}/analyze",deprecated=True)
 async def analyze_opportunity(opportunity_id:str,db:Session=Depends(get_db),principal:Principal=Depends(require_role("analyst"))):
  item=get_opportunity(opportunity_id,db)
  if not item:raise HTTPException(404,"Opportunity not found")
