@@ -229,6 +229,37 @@ engine = create_engine(settings.database_url, pool_pre_ping=True, connect_args=c
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
+def _apply_postgres_tenant_context(connection, organization_id: str) -> None:
+    if connection.dialect.name == "postgresql" and settings.database_rls_enabled:
+        connection.exec_driver_sql(
+            "SELECT set_config('app.current_organization_id', %s, true)",
+            (organization_id,),
+        )
+
+
+def set_tenant_context(session: Session, organization_id: str) -> None:
+    """Bind both ORM filtering and PostgreSQL RLS context to one organization."""
+    if not organization_id:
+        raise ValueError("organization_id is required")
+    session.info["organization_id"] = organization_id
+    _apply_postgres_tenant_context(session.connection(), organization_id)
+
+
+def clear_tenant_context(session: Session) -> None:
+    session.info.pop("organization_id", None)
+    if session.bind is not None and session.bind.dialect.name == "postgresql" and session.in_transaction():
+        session.connection().exec_driver_sql(
+            "SELECT set_config('app.current_organization_id', '', true)"
+        )
+
+
+@event.listens_for(Session, "after_begin")
+def _restore_postgres_tenant_context(session: Session, transaction, connection) -> None:
+    organization_id = session.info.get("organization_id")
+    if organization_id:
+        _apply_postgres_tenant_context(connection, organization_id)
+
+
 @event.listens_for(Session, "do_orm_execute")
 def _tenant_filter(execute_state) -> None:
     organization_id = execute_state.session.info.get("organization_id")
@@ -236,8 +267,6 @@ def _tenant_filter(execute_state) -> None:
         return
     statement = execute_state.statement
     for model in TENANT_MODELS:
-        # Use an explicit SQL expression instead of a closure-based lambda. This avoids
-        # SQLAlchemy lambda SQL caching a prior tenant value across sessions.
         statement = statement.options(
             with_loader_criteria(
                 model,
