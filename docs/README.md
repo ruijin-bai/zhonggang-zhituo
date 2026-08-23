@@ -18,6 +18,9 @@
 | [06_UI_UX_DESIGN.md](./06_UI_UX_DESIGN.md) | 信息架构、页面布局、关键交互、竞赛演示路径 | v0.1 |
 | [07_COMPETITION_STRATEGY.md](./07_COMPETITION_STRATEGY.md) | 个人赛定位、评分映射、演示故事线、验证指标 | v0.1 |
 | [08_IMPLEMENTATION_ROADMAP.md](./08_IMPLEMENTATION_ROADMAP.md) | 开发阶段、里程碑、任务拆解、完成定义 | v0.1 |
+| [DEMO_SCRIPT.md](./DEMO_SCRIPT.md) | 5–7 分钟英雄项目演示脚本与现场容错 | 可排练 |
+| [ACCEPTANCE_CHECKLIST.md](./ACCEPTANCE_CHECKLIST.md) | 赛前产品、AI、安全、工程和材料验收清单 | 执行中 |
+| [COMPETITION_SUBMISSION.md](./COMPETITION_SUBMISSION.md) | 个人赛申报书底稿：痛点、方案、创新、价值、合规、推广 | 初稿 |
 
 ## 文档使用规则
 
@@ -27,6 +30,8 @@
 4. 涉及实体字段、信息来源、引用、AI输入输出约束，在 `04_DATA_AI_DESIGN.md` 维护。
 5. 技术选型允许迭代，但必须服务于“易用、主流、专业、可演示、可部署”，不为技术炫技增加复杂度。
 6. 竞赛版优先形成完整经营闭环，不追求一次性覆盖企业全部市场管理场景。
+7. 准备录屏或提交前，必须逐项执行 `ACCEPTANCE_CHECKLIST.md`，不得用“现场应该能跑”代替验收。
+8. 申报材料中的效率、准确率、业务提升数字必须来自实际验证；未测试的数据不写百分比。
 
 ## 当前产品边界
 
@@ -50,6 +55,12 @@
 - 复杂项目成本测算与报价
 - 企业级权限体系的全部细节
 - 大规模爬虫平台和通用搜索引擎
+
+## 当前真实公开验证样例
+
+`data/public_samples/afdb_abia_roads_2026.json` 保存了一个仅由非洲开发银行公开资料构成的尼日利亚道路项目样例，用于验证项目发现、融资/采购信号抽取和 Evidence 流程。
+
+真实公开样例只证明系统能够处理外部公开信息，不代表公司已决定跟踪、投标或具有特定中标可能性。
 
 ## 竞赛首版成功标准
 
