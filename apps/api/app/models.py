@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 Grade = Literal["A", "B", "C", "D"]
 Decision = Literal["GO", "WATCH", "CAUTION", "NO-GO", "INSUFFICIENT_EVIDENCE"]
@@ -115,3 +115,77 @@ class AnalysisResult(BaseModel):
     risks: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)
     evidence_gaps: list[str] = Field(default_factory=list)
+
+
+class ProjectDiscovery(BaseModel):
+    project_detected: bool
+    title: str
+    country: str = "待识别"
+    region: str = "待识别"
+    sector: str = "待识别"
+    stage: str = "待核实"
+    owner: str = "待识别"
+    estimated_value_usd_m: float | None = None
+    summary: str
+    confidence: float = Field(ge=0, le=1)
+    facts: list[ExtractedFact] = Field(default_factory=list)
+
+
+class DiscoverRequest(BaseModel):
+    url: str | None = None
+    text: str | None = Field(default=None, max_length=100_000)
+    source_title: str | None = None
+    publisher: str = "公开来源"
+    published_at: str = "待核实"
+    source_rank: SourceRank = "B"
+    use_ai: bool = True
+    is_demo: bool = False
+
+    @model_validator(mode="after")
+    def require_url_or_text(self):
+        if not self.url and not (self.text and self.text.strip()):
+            raise ValueError("url 和 text 至少提供一个")
+        return self
+
+
+class DuplicateMatch(BaseModel):
+    opportunity_id: str
+    title: str
+    country: str
+    similarity: float = Field(ge=0, le=1)
+
+
+class DraftOpportunity(BaseModel):
+    id: str
+    status: Literal["pending", "confirmed", "rejected"] = "pending"
+    discovery: ProjectDiscovery
+    source_url: str | None = None
+    source_title: str
+    publisher: str
+    published_at: str
+    source_rank: SourceRank
+    duplicate_matches: list[DuplicateMatch] = Field(default_factory=list)
+    persisted: bool
+
+
+class DiscoverResult(BaseModel):
+    mode: Literal["ai", "deterministic"]
+    draft: DraftOpportunity
+    note: str
+
+
+class ConfirmDraftRequest(BaseModel):
+    title: str | None = None
+    country: str | None = None
+    region: str | None = None
+    sector: str | None = None
+    stage: str | None = None
+    owner: str | None = None
+    estimated_value_usd_m: float | None = None
+    summary: str | None = None
+
+
+class ConfirmDraftResult(BaseModel):
+    opportunity: Opportunity
+    source_bound: bool
+    note: str

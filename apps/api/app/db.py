@@ -17,7 +17,6 @@ class Base(DeclarativeBase):
 
 class OpportunityRecord(Base):
     __tablename__ = "opportunities"
-
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
     title: Mapped[str] = mapped_column(String(300))
     country: Mapped[str] = mapped_column(String(120), index=True)
@@ -41,11 +40,8 @@ class OpportunityRecord(Base):
 
 class SourceRecord(Base):
     __tablename__ = "sources"
-
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    opportunity_id: Mapped[str | None] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="CASCADE"), nullable=True, index=True
-    )
+    opportunity_id: Mapped[str | None] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(500))
     publisher: Mapped[str] = mapped_column(String(240))
     published_at: Mapped[str] = mapped_column(String(40))
@@ -58,14 +54,9 @@ class SourceRecord(Base):
 
 class EvidenceRecord(Base):
     __tablename__ = "evidence"
-
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    opportunity_id: Mapped[str] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="CASCADE"), index=True
-    )
-    source_id: Mapped[str | None] = mapped_column(
-        ForeignKey("sources.id", ondelete="CASCADE"), nullable=True, index=True
-    )
+    opportunity_id: Mapped[str] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), index=True)
+    source_id: Mapped[str | None] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"), nullable=True, index=True)
     rank: Mapped[str] = mapped_column(String(1), index=True)
     title: Mapped[str] = mapped_column(String(500))
     publisher: Mapped[str] = mapped_column(String(240))
@@ -79,11 +70,8 @@ class EvidenceRecord(Base):
 
 class ScoreSnapshotRecord(Base):
     __tablename__ = "score_snapshots"
-
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    opportunity_id: Mapped[str] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="CASCADE"), index=True
-    )
+    opportunity_id: Mapped[str] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), index=True)
     snapshot_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     total: Mapped[int] = mapped_column(Integer)
     grade: Mapped[str] = mapped_column(String(1))
@@ -93,11 +81,8 @@ class ScoreSnapshotRecord(Base):
 
 class OpportunityEventRecord(Base):
     __tablename__ = "opportunity_events"
-
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    opportunity_id: Mapped[str] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="CASCADE"), index=True
-    )
+    opportunity_id: Mapped[str] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), index=True)
     event_type: Mapped[str] = mapped_column(String(80), index=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     payload: Mapped[dict] = mapped_column(JSON)
@@ -105,15 +90,29 @@ class OpportunityEventRecord(Base):
 
 class AIAnalysisRecord(Base):
     __tablename__ = "ai_analyses"
-
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    opportunity_id: Mapped[str] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="CASCADE"), index=True
-    )
+    opportunity_id: Mapped[str] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), index=True)
     model: Mapped[str] = mapped_column(String(120))
     mode: Mapped[str] = mapped_column(String(40))
     payload: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class OpportunityDraftRecord(Base):
+    __tablename__ = "opportunity_drafts"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    discovery: Mapped[dict] = mapped_column(JSON)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_title: Mapped[str] = mapped_column(String(500))
+    publisher: Mapped[str] = mapped_column(String(240))
+    published_at: Mapped[str] = mapped_column(String(40))
+    source_rank: Mapped[str] = mapped_column(String(1))
+    raw_text: Mapped[str] = mapped_column(Text)
+    duplicate_matches: Mapped[list] = mapped_column(JSON, default=list)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
 
 settings = get_settings()
