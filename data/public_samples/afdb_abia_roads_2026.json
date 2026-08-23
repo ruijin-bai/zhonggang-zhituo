@@ -1,0 +1,39 @@
+{
+  "sample_id": "afdb-abia-roads-2026",
+  "data_class": "public_verified_sample",
+  "retrieved_on": "2026-08-23",
+  "project": {
+    "name": "Abia State Integrated Infrastructure Development Project (ABSIIDP) - Phase I",
+    "country": "Nigeria",
+    "region": "West Africa",
+    "sector": "Road / Urban Infrastructure",
+    "project_id": "P-NG-K00-011",
+    "financier": "African Development Bank",
+    "implementing_context": "Abia State Integrated Infrastructure Development Project"
+  },
+  "verified_signals": [
+    {
+      "date": "2026-05-13",
+      "signal": "Invitation for Bids for construction of 2 pilot roads in Aba under AfDB-funded roads",
+      "implication": "Formal procurement activity exists; project maturity is beyond concept or feasibility stage.",
+      "source_rank": "S",
+      "source_url": "https://www.afdb.org/en/documents/ifb-nigeria-construction-2-pilot-roads-aba-under-afdb-funded-roads-absiidp"
+    },
+    {
+      "date": "2026-06-18",
+      "signal": "AfDB published an EOI for Monitoring and Evaluation consultancy under ABSIIDP",
+      "implication": "The broader program remains under active implementation and institutional procurement.",
+      "source_rank": "S",
+      "source_url": "https://www.afdb.org/en/documents/eoi-nigeria-engagement-monitoring-and-evaluation-me-consultant-absiidp"
+    },
+    {
+      "date": "2026-07-20",
+      "signal": "Invitation for Bids for AfDB-funded road construction Lots 2-10",
+      "implication": "Multiple road work packages are in formal bidding, providing a strong procurement-stage signal.",
+      "source_rank": "S",
+      "source_url": "https://www.afdb.org/en/documents/ifb-nigeria-construction-roads-under-afdb-funded-roads-lot-2-lot-10-absiidp"
+    }
+  ],
+  "safe_demo_text": "The Abia State Integrated Infrastructure Development Project in Nigeria has received financing from the African Development Bank. Public procurement notices in 2026 include invitations for bids for road construction packages in Aba and other AfDB-funded road lots. The project therefore has verified financing and formal procurement-stage signals. This sample intentionally omits any non-public relationship, competitor pricing, or client preference assumptions.",
+  "usage_note": "Use this file only as a public-source validation sample for discovery/extraction/evidence features. Do not infer bid probability, competitor relationships, private client preferences, or CHEC-specific pursuit status from these public notices."
+}
