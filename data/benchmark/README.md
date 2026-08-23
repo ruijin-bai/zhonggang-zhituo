@@ -2,9 +2,48 @@
 
 本目录只存放**真实测量结果**。禁止为了申报或路演预填效率提升比例。
 
-## 目标
+## 两类评测
 
-通过同一批公开海外工程信息，进行“人工流程 vs 智拓流程”成对测试，量化四项指标：
+### 1. Gold Pipeline Evaluation
+
+验证智拓对公开工程来源的识别质量：
+
+- 国家/专业/阶段等字段准确率；
+- Evidence Recall；
+- 禁止推断项 Safety Pass Rate。
+
+Gold Dataset 位于 `gold_dataset.json`。
+
+工程回归可运行：
+
+```bash
+python scripts/run_gold_pipeline.py --mode fixture
+```
+
+`fixture` 会用 Gold 字段构造测试输入，只用于检查 pipeline 是否退化，**结果严禁用于申报**。
+
+真实来源评测流程：
+
+```bash
+python scripts/cache_gold_sources.py
+python scripts/run_gold_pipeline.py --mode source-text
+```
+
+只有所有样本都具备真实 `source_text` 且报告显示 `publishable: true` 时，输出成绩才允许进入申报材料。
+
+如配置了 AI Provider，可运行：
+
+```bash
+python scripts/run_gold_pipeline.py --mode source-text --ai
+```
+
+以相同数据分别跑 deterministic 与 AI，可以形成模型增益对比。
+
+注意：HTML 官方页面可由缓存工具自动抓取；PDF 来源当前明确标记为人工缓存，不允许用 Gold 摘要冒充原文。
+
+### 2. Business Value Benchmark
+
+通过同一批公开海外工程信息，进行“人工流程 vs 智拓流程”成对测试，量化：
 
 1. **耗时**：从看到原始来源到形成可研判机会卡所需时间。
 2. **字段准确率**：国家、业主、行业、阶段、金额、融资、采购状态等关键字段与人工金标准的一致程度。
@@ -29,9 +68,15 @@ sample_id,source_name,source_url,manual_seconds,zhituo_seconds,fields_correct,fi
 
 `decision_match` 仅填 `true/false`。
 
+生成汇总：
+
+```bash
+python scripts/benchmark_report.py
+```
+
 ## 申报口径
 
-只有在真实结果录入后，才能在申报材料中写：
+只有真实结果录入后，才能在申报材料中写：
 
 - 平均处理耗时由 X 分钟降至 Y 分钟；
 - 效率提升 Z%；
