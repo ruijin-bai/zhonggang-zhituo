@@ -9,6 +9,7 @@ from .admin import router as admin_router
 from .ai import AIService
 from .audit import write_audit
 from .battlecard import get_battlecard
+from .business_idempotency import begin_operation, complete_operation, fail_operation
 from .config import get_settings
 from .db import get_db
 from .discovery import confirm_draft, discover
@@ -74,6 +75,10 @@ app.include_router(jobs_router)
 def _inline_only(job_endpoint: str) -> None:
     if settings.job_mode == "queue":
         raise HTTPException(status_code=409, detail=f"Queued execution required. Use {job_endpoint}")
+
+
+def _idempotency_key(request: Request) -> str | None:
+    return request.headers.get("Idempotency-Key")
 
 
 @app.get("/health")
@@ -240,6 +245,15 @@ def discovery_confirm(
     db: Session = Depends(get_db),
     principal: Principal = Depends(require_role("manager")),
 ) -> ConfirmDraftResult:
+    handle = begin_operation(
+        db,
+        organization_id=principal.organization_id,
+        scope=f"draft.confirm:{draft_id}",
+        raw_key=_idempotency_key(http_request),
+        request_payload=request.model_dump(mode="json"),
+    )
+    if handle.is_replay:
+        return ConfirmDraftResult.model_validate(handle.replay_payload)
     try:
         result = confirm_draft(draft_id, request, db)
         write_audit(
@@ -252,9 +266,14 @@ def discovery_confirm(
             details={"draft_id": draft_id},
         )
         db.commit()
+        complete_operation(db, handle, result.model_dump(mode="json"))
         return result
     except ValueError as exc:
+        fail_operation(db, handle, str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        fail_operation(db, handle, type(exc).__name__)
+        raise
 
 
 @app.get("/api/tracking", response_model=TrackingBoard)
@@ -273,6 +292,15 @@ def tracking_watch(
     db: Session = Depends(get_db),
     principal: Principal = Depends(require_role("analyst")),
 ):
+    handle = begin_operation(
+        db,
+        organization_id=principal.organization_id,
+        scope=f"tracking.watch:{opportunity_id}",
+        raw_key=_idempotency_key(http_request),
+        request_payload=request.model_dump(mode="json"),
+    )
+    if handle.is_replay:
+        return handle.replay_payload
     try:
         result = watch_opportunity(opportunity_id, request, db)
         write_audit(
@@ -284,9 +312,14 @@ def tracking_watch(
             request=http_request,
         )
         db.commit()
+        complete_operation(db, handle, result)
         return result
     except ValueError as exc:
+        fail_operation(db, handle, str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        fail_operation(db, handle, type(exc).__name__)
+        raise
 
 
 @app.post("/api/tracking/{opportunity_id}/actions")
@@ -297,6 +330,15 @@ def tracking_add_action(
     db: Session = Depends(get_db),
     principal: Principal = Depends(require_role("analyst")),
 ):
+    handle = begin_operation(
+        db,
+        organization_id=principal.organization_id,
+        scope=f"action.create:{opportunity_id}",
+        raw_key=_idempotency_key(http_request),
+        request_payload=request.model_dump(mode="json"),
+    )
+    if handle.is_replay:
+        return handle.replay_payload
     try:
         result = add_action(opportunity_id, request, db)
         write_audit(
@@ -309,9 +351,14 @@ def tracking_add_action(
             details={"title": request.title},
         )
         db.commit()
+        complete_operation(db, handle, result)
         return result
     except ValueError as exc:
+        fail_operation(db, handle, str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        fail_operation(db, handle, type(exc).__name__)
+        raise
 
 
 @app.post("/api/tracking/actions/{action_id}/complete")
@@ -321,6 +368,15 @@ def tracking_complete_action(
     db: Session = Depends(get_db),
     principal: Principal = Depends(require_role("analyst")),
 ):
+    handle = begin_operation(
+        db,
+        organization_id=principal.organization_id,
+        scope=f"action.complete:{action_id}",
+        raw_key=_idempotency_key(http_request),
+        request_payload={"action_id": action_id},
+    )
+    if handle.is_replay:
+        return handle.replay_payload
     try:
         result = complete_action(action_id, db)
         write_audit(
@@ -332,9 +388,14 @@ def tracking_complete_action(
             request=http_request,
         )
         db.commit()
+        complete_operation(db, handle, result)
         return result
     except ValueError as exc:
+        fail_operation(db, handle, str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        fail_operation(db, handle, type(exc).__name__)
+        raise
 
 
 @app.post("/api/tracking/alerts/{alert_id}/resolve")
@@ -344,6 +405,15 @@ def tracking_resolve_alert(
     db: Session = Depends(get_db),
     principal: Principal = Depends(require_role("analyst")),
 ):
+    handle = begin_operation(
+        db,
+        organization_id=principal.organization_id,
+        scope=f"alert.resolve:{alert_id}",
+        raw_key=_idempotency_key(http_request),
+        request_payload={"alert_id": alert_id},
+    )
+    if handle.is_replay:
+        return handle.replay_payload
     try:
         result = resolve_alert(alert_id, db)
         write_audit(
@@ -355,9 +425,14 @@ def tracking_resolve_alert(
             request=http_request,
         )
         db.commit()
+        complete_operation(db, handle, result)
         return result
     except ValueError as exc:
+        fail_operation(db, handle, str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        fail_operation(db, handle, type(exc).__name__)
+        raise
 
 
 @app.get("/api/opportunities/{opportunity_id}/strategy", response_model=StrategyWorkspace)
@@ -380,6 +455,15 @@ def pursuit_strategy_update(
     db: Session = Depends(get_db),
     principal: Principal = Depends(require_role("manager")),
 ) -> StrategyWorkspace:
+    handle = begin_operation(
+        db,
+        organization_id=principal.organization_id,
+        scope=f"strategy.update:{opportunity_id}",
+        raw_key=_idempotency_key(http_request),
+        request_payload=request.model_dump(mode="json"),
+    )
+    if handle.is_replay:
+        return StrategyWorkspace.model_validate(handle.replay_payload)
     try:
         result = save_strategy(opportunity_id, request, db)
         write_audit(
@@ -391,9 +475,14 @@ def pursuit_strategy_update(
             request=http_request,
         )
         db.commit()
+        complete_operation(db, handle, result.model_dump(mode="json"))
         return result
     except ValueError as exc:
+        fail_operation(db, handle, str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        fail_operation(db, handle, type(exc).__name__)
+        raise
 
 
 @app.post("/api/opportunities/{opportunity_id}/strategy/generate", deprecated=True)
