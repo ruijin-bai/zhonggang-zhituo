@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     max_request_body_bytes: int = 2_000_000
     security_headers_enabled: bool = True
     hsts_max_age_seconds: int = 31_536_000
+    authenticated_rate_limit_per_minute: int = 300
 
     # Database-side tenant isolation.
     database_rls_enabled: bool = True
@@ -62,6 +63,8 @@ class Settings(BaseSettings):
             raise ValueError("IDEMPOTENCY_TTL_SECONDS must be at least 60")
         if self.max_request_body_bytes < 64_000 or self.max_request_body_bytes > 20_000_000:
             raise ValueError("MAX_REQUEST_BODY_BYTES must be between 64000 and 20000000")
+        if self.authenticated_rate_limit_per_minute < 0:
+            raise ValueError("AUTHENTICATED_RATE_LIMIT_PER_MINUTE cannot be negative")
 
         if self.app_env == "production":
             if self.data_backend != "database":
@@ -86,6 +89,8 @@ class Settings(BaseSettings):
                     raise ValueError("oidc production mode requires HTTPS OIDC_JWKS_URL")
             if not self.database_rls_enabled:
                 raise ValueError("production requires DATABASE_RLS_ENABLED=true")
+            if self.authenticated_rate_limit_per_minute <= 0:
+                raise ValueError("production requires AUTHENTICATED_RATE_LIMIT_PER_MINUTE > 0")
             if "127.0.0.1" in self.database_url or "localhost" in self.database_url:
                 raise ValueError("production DATABASE_URL must point to an explicit production database service")
             if "127.0.0.1" in self.redis_url or "localhost" in self.redis_url:
