@@ -16,7 +16,6 @@ RUN addgroup -S zhituo && adduser -S zhituo -G zhituo
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
-COPY --from=build /app/public ./public
 
 USER zhituo
 EXPOSE 3000
