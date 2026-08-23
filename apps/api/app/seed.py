@@ -32,7 +32,7 @@ def _date(value: str) -> datetime:
     return datetime.fromisoformat(value).replace(tzinfo=timezone.utc)
 
 
-def _seed_identity(session: Session) -> None:
+def _seed_identity(session: Session) -> str:
     org = session.scalar(select(OrganizationRecord).where(OrganizationRecord.code == "CHEC-DEMO"))
     if org is None:
         org = OrganizationRecord(id=str(uuid4()), name="中港智拓演示组织", code="CHEC-DEMO", is_active=True)
@@ -51,31 +51,41 @@ def _seed_identity(session: Session) -> None:
     )
     if membership is None:
         session.add(MembershipRecord(organization_id=org.id, user_id=user.id, role="admin", is_active=True))
+    session.flush()
+    return org.id
 
 
 def reset_demo_data(session: Session) -> int:
     """Delete demo business data only, preserving all non-demo/public records and identities."""
-    demo_ids = list(session.scalars(select(OpportunityRecord.id).where(OpportunityRecord.is_demo.is_(True))).all())
-    if demo_ids:
-        for model in (
-            AIAnalysisRecord,
-            PursuitAlertRecord,
-            PursuitActionRecord,
-            WatchItemRecord,
-            OpportunityEventRecord,
-            ScoreSnapshotRecord,
-            EvidenceRecord,
-            SourceRecord,
-        ):
-            session.execute(delete(model).where(model.opportunity_id.in_(demo_ids)))
-        session.execute(delete(OpportunityRecord).where(OpportunityRecord.id.in_(demo_ids)))
-    session.execute(delete(OpportunityDraftRecord).where(OpportunityDraftRecord.is_demo.is_(True)))
-    session.commit()
-    return len(demo_ids)
+    # CLI reset is an explicit system operation. Clear request tenant context so all demo
+    # tenants can be cleaned without weakening request-time isolation.
+    previous_org = session.info.pop("organization_id", None)
+    try:
+        demo_ids = list(session.scalars(select(OpportunityRecord.id).where(OpportunityRecord.is_demo.is_(True))).all())
+        if demo_ids:
+            for model in (
+                AIAnalysisRecord,
+                PursuitAlertRecord,
+                PursuitActionRecord,
+                WatchItemRecord,
+                OpportunityEventRecord,
+                ScoreSnapshotRecord,
+                EvidenceRecord,
+                SourceRecord,
+            ):
+                session.execute(delete(model).where(model.opportunity_id.in_(demo_ids)))
+            session.execute(delete(OpportunityRecord).where(OpportunityRecord.id.in_(demo_ids)))
+        session.execute(delete(OpportunityDraftRecord).where(OpportunityDraftRecord.is_demo.is_(True)))
+        session.commit()
+        return len(demo_ids)
+    finally:
+        if previous_org:
+            session.info["organization_id"] = previous_org
 
 
 def seed_demo_data(session: Session) -> int:
-    _seed_identity(session)
+    org_id = _seed_identity(session)
+    session.info["organization_id"] = org_id
     payload = json.loads(DATA_FILE.read_text(encoding="utf-8"))
     created = 0
     for raw in payload:
@@ -172,30 +182,9 @@ def seed_demo_data(session: Session) -> int:
         )
         session.add_all(
             [
-                PursuitActionRecord(
-                    opportunity_id=HERO_ID,
-                    title="核实采购模式与预计招标时间",
-                    owner="市场经理",
-                    priority="high",
-                    due_at=now + timedelta(days=5),
-                    note="确认采购路径及资格预审时间。",
-                ),
-                PursuitActionRecord(
-                    opportunity_id=HERO_ID,
-                    title="梳理业主与融资方决策链",
-                    owner="区域团队",
-                    priority="high",
-                    due_at=now + timedelta(days=8),
-                    note="只记录可验证机构和正式角色。",
-                ),
-                PursuitActionRecord(
-                    opportunity_id=HERO_ID,
-                    title="形成港口+疏港交通一体化方案摘要",
-                    owner="技术经营组",
-                    priority="high",
-                    due_at=now + timedelta(days=10),
-                    note="把综合交付能力转化为客户价值。",
-                ),
+                PursuitActionRecord(opportunity_id=HERO_ID, title="核实采购模式与预计招标时间", owner="市场经理", priority="high", due_at=now + timedelta(days=5), note="确认采购路径及资格预审时间。"),
+                PursuitActionRecord(opportunity_id=HERO_ID, title="梳理业主与融资方决策链", owner="区域团队", priority="high", due_at=now + timedelta(days=8), note="只记录可验证机构和正式角色。"),
+                PursuitActionRecord(opportunity_id=HERO_ID, title="形成港口+疏港交通一体化方案摘要", owner="技术经营组", priority="high", due_at=now + timedelta(days=10), note="把综合交付能力转化为客户价值。"),
             ]
         )
         v1 = {
@@ -211,55 +200,17 @@ def seed_demo_data(session: Session) -> int:
         v2 = {
             "win_theme": "以港口—疏港交通一体化交付能力，帮助业主降低多接口协调风险并提升项目落地确定性。",
             "client_need": "在融资与采购尚处前期时，尽快形成可融资、可采购、可实施的一体化建设路径。",
-            "differentiation": [
-                "港航+道路交通跨专业一体化组织能力",
-                "海外属地供应链和施工资源可支撑快速落地",
-                "同类大型基础设施履约经验可降低接口与工期风险",
-            ],
+            "differentiation": ["港航+道路交通跨专业一体化组织能力", "海外属地供应链和施工资源可支撑快速落地", "同类大型基础设施履约经验可降低接口与工期风险"],
             "gaps": ["采购评价权重尚无正式证据", "融资方对实施方案的核心约束待核实"],
             "competitors": [],
             "stakeholders": [
-                {
-                    "name": "业主项目执行机构",
-                    "organization": "项目业主",
-                    "role": "项目决策与采购组织",
-                    "influence": "high",
-                    "stance": "unknown",
-                    "evidence": "公开项目组织信息，具体人员待核实",
-                    "confidence": 65,
-                },
-                {
-                    "name": "融资机构项目团队",
-                    "organization": "融资方",
-                    "role": "融资条件与项目可实施性审查",
-                    "influence": "high",
-                    "stance": "unknown",
-                    "evidence": "融资谈判阶段判断，具体机构要求待正式来源确认",
-                    "confidence": 55,
-                },
+                {"name": "业主项目执行机构", "organization": "项目业主", "role": "项目决策与采购组织", "influence": "high", "stance": "unknown", "evidence": "公开项目组织信息，具体人员待核实", "confidence": 65},
+                {"name": "融资机构项目团队", "organization": "融资方", "role": "融资条件与项目可实施性审查", "influence": "high", "stance": "unknown", "evidence": "融资谈判阶段判断，具体机构要求待正式来源确认", "confidence": 55},
             ],
-            "next_moves": [
-                "核实采购模式与预计招标时间",
-                "形成港口+疏港交通一体化方案摘要",
-                "获取融资约束与采购评价标准的一手信息",
-            ],
+            "next_moves": ["核实采购模式与预计招标时间", "形成港口+疏港交通一体化方案摘要", "获取融资约束与采购评价标准的一手信息"],
             "updated_at": now.isoformat(),
         }
-        session.add(
-            OpportunityEventRecord(
-                opportunity_id=HERO_ID,
-                event_type="strategy_updated",
-                occurred_at=now - timedelta(days=6),
-                payload=v1,
-            )
-        )
-        session.add(
-            OpportunityEventRecord(
-                opportunity_id=HERO_ID,
-                event_type="strategy_updated",
-                occurred_at=now,
-                payload=v2,
-            )
-        )
+        session.add(OpportunityEventRecord(opportunity_id=HERO_ID, event_type="strategy_updated", occurred_at=now - timedelta(days=6), payload=v1))
+        session.add(OpportunityEventRecord(opportunity_id=HERO_ID, event_type="strategy_updated", occurred_at=now, payload=v2))
     session.commit()
     return created
