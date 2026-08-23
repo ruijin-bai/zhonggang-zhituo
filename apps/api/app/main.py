@@ -1,8 +1,8 @@
+from importlib.metadata import PackageNotFoundError, version
+
 import httpx
-import redis
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .admin import router as admin_router
@@ -44,15 +44,28 @@ from .tracking import (
 
 settings = get_settings()
 configure_logging()
+try:
+    APP_VERSION = version("zhituo-api")
+except PackageNotFoundError:
+    APP_VERSION = "0.12.0"
 
-app = FastAPI(title="中港智拓 API", version="0.11.0")
+app = FastAPI(title="中港智拓 API", version=APP_VERSION)
 install_observability(app)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Idempotency-Key",
+        "X-Request-ID",
+        "X-Correlation-ID",
+        "X-Zhituo-User",
+        "X-Zhituo-Gateway-Secret",
+        "X-Zhituo-Organization",
+    ],
 )
 app.include_router(admin_router)
 app.include_router(jobs_router)
@@ -68,47 +81,20 @@ def health() -> dict:
     return {
         "status": "ok",
         "service": "zhituo-api",
-        "version": "0.11.0",
+        "version": APP_VERSION,
         "job_mode": settings.job_mode,
     }
-
-
-@app.get("/api/health/live")
-def liveness() -> dict[str, str]:
-    return {"status": "ok", "service": "zhituo-api"}
-
-
-@app.get("/api/health/ready")
-def readiness(db: Session = Depends(get_db)) -> dict:
-    checks: dict[str, str] = {}
-    try:
-        db.execute(text("SELECT 1"))
-        checks["database"] = "ok"
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail={"status": "not_ready", "database": str(exc)}) from exc
-
-    if settings.job_mode == "queue":
-        try:
-            client = redis.Redis.from_url(settings.redis_url, socket_connect_timeout=2, socket_timeout=2)
-            if not client.ping():
-                raise RuntimeError("Redis PING returned false")
-            checks["redis"] = "ok"
-        except Exception as exc:
-            raise HTTPException(
-                status_code=503,
-                detail={"status": "not_ready", "database": "ok", "redis": str(exc)},
-            ) from exc
-
-    return {"status": "ready", "checks": checks}
 
 
 @app.get("/api/meta")
 def meta(principal: Principal = Depends(get_principal)) -> dict:
     return {
-        "version": "0.11.0",
+        "version": APP_VERSION,
         "data_backend": settings.data_backend,
         "job_mode": settings.job_mode,
         "ai_enabled": settings.ai_enabled,
+        "auth_mode": settings.auth_mode,
+        "rls_enabled": settings.database_rls_enabled,
         "organization": principal.organization_name,
         "role": principal.role,
     }
