@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { runQueuedJob } from "@/lib/client-job";
 import { DEMO_FALLBACK_ALLOWED } from "@/lib/demo-operating";
 
 type Fact = {
@@ -63,26 +64,20 @@ export default function IntelligenceWorkbench() {
     setError("");
     setResult(null);
     try {
-      const response = await fetch("/api/ingest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          opportunity_id: "west-africa-port-access-corridor",
-          title: "融资与采购状态更新（工程化演示）",
-          publisher: "权威来源示范",
-          published_at: "2026-08-23",
-          source_rank: sourceRank,
-          text,
-          use_ai: true,
-          is_demo: true,
-        }),
+      const payload = await runQueuedJob<Result>("source.ingest", {
+        opportunity_id: "west-africa-port-access-corridor",
+        title: "融资与采购状态更新（工程化演示）",
+        publisher: "权威来源示范",
+        published_at: "2026-08-23",
+        source_rank: sourceRank,
+        text,
+        use_ai: true,
+        is_demo: true,
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail ?? "情报处理失败");
       setResult(payload);
     } catch (err) {
       if (DEMO_FALLBACK_ALLOWED) setResult(offlineResult(sourceRank));
-      else setError(err instanceof Error ? err.message : "情报处理失败，请检查 API 与数据库状态。")
+      else setError(err instanceof Error ? err.message : "情报处理失败，请检查认证、队列、API 与数据库状态。")
     } finally {
       setLoading(false);
     }
@@ -112,7 +107,7 @@ export default function IntelligenceWorkbench() {
         <button className="primary-button" type="submit" disabled={loading}>
           {loading ? "正在抽取与重评…" : "抽取事实并触发重评"}
         </button>
-        <div className="policy-note">自动改分仅允许 S/A 级来源且单项抽取置信度 ≥ 80%；其他来源只进入证据链。</div>
+        <div className="policy-note">处理通过异步队列执行。自动改分仅允许 S/A 级来源且单项抽取置信度 ≥ 80%；其他来源只进入证据链。</div>
       </form>
 
       <div className="stack">
