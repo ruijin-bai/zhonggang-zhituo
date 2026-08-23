@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { DEMO_FALLBACK_ALLOWED } from "@/lib/demo-operating";
 
 type Fact = {
   field_name: string;
@@ -79,8 +80,9 @@ export default function IntelligenceWorkbench() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail ?? "情报处理失败");
       setResult(payload);
-    } catch {
-      setResult(offlineResult(sourceRank));
+    } catch (err) {
+      if (DEMO_FALLBACK_ALLOWED) setResult(offlineResult(sourceRank));
+      else setError(err instanceof Error ? err.message : "情报处理失败，请检查 API 与数据库状态。")
     } finally {
       setLoading(false);
     }
