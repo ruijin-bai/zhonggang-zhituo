@@ -23,6 +23,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <nav>
               <Link href="/">经营总览</Link>
               <Link href="/opportunities">机会池</Link>
+              <Link href="/intelligence">情报导入</Link>
               <span className="nav-disabled">市场雷达 · 即将接入</span>
               <span className="nav-disabled">重点跟踪 · 即将接入</span>
             </nav>
