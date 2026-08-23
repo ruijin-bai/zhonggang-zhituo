@@ -23,8 +23,9 @@
 - `ALLOW_DEMO_FALLBACK=true`
 - `NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=true`
 - `DATA_BACKEND=auto`
+- `JOB_MODE=inline` 或 `queue`
 
-允许数据库未启动时使用内置 Demo 数据，保证开发与比赛演示稳定。
+允许数据库未启动时使用内置 Demo 数据；开发者可选择同步调试或完整 Redis/Celery 异步链路。
 
 ### Production
 
@@ -33,8 +34,9 @@
 - `ALLOW_DEMO_FALLBACK=false`
 - `NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=false`
 - `DATA_BACKEND=database`
+- `JOB_MODE=queue`
 
-生产环境禁止静默回退 Demo 数据。API/数据库故障必须显式失败并进入监控，而不是向用户展示模拟经营数据。
+生产环境禁止静默回退 Demo 数据，禁止同步执行网页抓取、情报抽取和 AI 长任务。API/数据库/Worker 故障必须显式失败并进入监控。
 
 ## 3. Production Alpha
 
@@ -49,15 +51,19 @@
 - [x] 市场雷达
 - [x] 跟踪 / 策略 / 作战卡基础链路
 - [x] Demo 与 Production fallback 隔离
-- [ ] 用户身份与 RBAC
-- [ ] Organization / Region / Team 数据隔离
+- [x] 用户身份与基础 RBAC
+- [x] Organization 基础模型与 Job 组织隔离
+- [x] Audit Log 基础能力
+- [x] Redis + Celery 后台任务队列
+- [x] 采集、情报抽取、AI 研判、策略生成和红队任务不阻塞生产 HTTP 请求
+- [ ] Region / Team 细粒度数据隔离
+- [ ] 企业 SSO / OIDC 身份接入
 - [ ] 生产部署配置与 Secrets 管理
-- [ ] API 请求日志、错误追踪、审计日志
+- [ ] API 请求日志、错误追踪与 Worker 可观测性
 - [ ] 数据库自动备份与恢复演练
-- [ ] 后台任务队列：采集、解析、AI 分析不阻塞 HTTP 请求
 - [ ] Source Connector：RSS / 官方公告页 / API / PDF
 - [ ] 文档原件存储与内容哈希去重
-- [ ] 真实经营 Action：负责人、截止时间、状态、提醒
+- [ ] 真实经营 Action：负责人账号、截止时间、状态、提醒
 
 ### P1 — Internal Pilot
 
@@ -75,7 +81,6 @@
 
 ### P2 — Production Beta
 
-- [ ] SSO / 企业身份系统
 - [ ] 审批流与 Go / No-Go 决策留痕
 - [ ] 管理层组合视图与资源配置
 - [ ] 多区域公司协同与权限继承
@@ -84,9 +89,9 @@
 - [ ] 灾备、限流、WAF、安全扫描
 - [ ] 数据保留、删除、导出和合规策略
 
-## 4. 目标技术架构
+## 4. 当前目标技术架构
 
-短期坚持**模块化单体**，不为了“生产级”过早微服务化。
+短期坚持**模块化单体 + 独立 Worker**，不为了“生产级”过早微服务化。
 
 ```text
 Browser
@@ -95,23 +100,39 @@ Next.js Web
   ↓
 FastAPI Application
   ├─ Market / Opportunity / Strategy domain modules
-  ├─ Auth + RBAC
+  ├─ Auth adapter + RBAC
   ├─ Audit
   └─ Job dispatcher
        ↓
-Redis / Worker Queue
-  ├─ Public-source collectors
-  ├─ Document parsing
-  ├─ AI extraction
-  └─ Re-score / alerts
+Redis
+  ├─ Celery Broker
+  ├─ Job Result Backend
+  └─ Organization-scoped Job metadata
+       ↓
+Celery Workers
+  ├─ Public-source discovery
+  ├─ Batch scanning
+  ├─ AI extraction / re-score
+  ├─ Opportunity analysis
+  ├─ Strategy generation
+  └─ Red-team challenge
 
 PostgreSQL       Object Storage       Search / Vector
 (structured)     (source originals)   (retrieval)
 ```
 
-只有当采集规模、组织规模或独立发布需求真正出现时，再拆 Collector、AI Worker、Search 等服务。
+只有当采集规模、组织规模或独立发布需求真正出现时，再拆 Collector、AI Worker、Search 等独立服务。
 
-## 5. 数据原则
+## 5. 后台任务约束
+
+- Job 使用 Organization 元数据隔离，其他组织不能查询结果。
+- 默认启用 `task_track_started`、late ack、worker-lost reject 和有限重试。
+- Worker `prefetch_multiplier=1`，避免单个 Worker 一次预取大量慢任务。
+- 长任务设置软/硬超时；超时不得破坏已存在事实数据。
+- Job Result 默认只作为短期结果保存；长期经营事实必须进入 PostgreSQL，而不是依赖 Redis。
+- 生产环境旧同步长任务接口被阻断，必须通过 `/api/jobs/...` 提交。
+
+## 6. 数据原则
 
 ### 事实、推断、建议必须分层
 
@@ -121,20 +142,13 @@ PostgreSQL       Object Storage       Search / Vector
 
 ### Unknown is valid
 
-系统允许“不知道”。不得为了让字段完整而让 AI 补造：
-
-- 客户关系
-- 领导态度
-- 竞争报价
-- 未公开融资状态
-- 中标概率
-- 未核实伙伴关系
+系统允许“不知道”。不得为了让字段完整而让 AI 补造客户关系、领导态度、竞争报价、未公开融资状态、中标概率或未核实伙伴关系。
 
 ### 生产评分不是中标概率
 
 Score 用于经营资源排序与风险暴露，不表达统计意义上的精确中标概率。
 
-## 6. Production Definition of Done
+## 7. Production Definition of Done
 
 一个功能只有满足以下条件才视为生产完成：
 
@@ -149,16 +163,15 @@ Score 用于经营资源排序与风险暴露，不表达统计意义上的精�
 9. 数据变更可以知道“谁、何时、为什么”；
 10. 有可部署、可回滚、可恢复路径。
 
-## 7. 下一工程阶段
+## 8. 下一工程阶段
 
-下一阶段按以下顺序推进，不再以增加页面数量为目标：
+当前优先级调整为：
 
-1. **Auth + RBAC + Organization**
-2. **Audit Log**
-3. **Background Jobs + Redis**
-4. **真实 Source Connectors + Object Storage**
-5. **Entity / Search / Knowledge Layer**
-6. **真实 Action / Reminder / Workflow**
-7. **Observability + Backup + Security hardening**
+1. **真实 Source Connectors + Object Storage**
+2. **Region / Team 数据隔离 + 企业 SSO/OIDC**
+3. **Worker / API Observability + Backup**
+4. **Entity / Search / Knowledge Layer**
+5. **真实 Action / Reminder / Workflow**
+6. **Security hardening + Secrets management**
 
 比赛 Demo 继续从同一产品代码构建，但只是一种运行模式，不再决定主产品架构。
