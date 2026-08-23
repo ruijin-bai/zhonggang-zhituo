@@ -31,9 +31,10 @@ def meta() -> dict:
     return {
         "version": "0.2.0",
         "data_backend": settings.data_backend,
-        "ai_enabled": settings.ai_enabled,
-        "ai_extraction_model": settings.ai_model_extraction if settings.ai_enabled else None,
-        "ai_analysis_model": settings.ai_model_analysis if settings.ai_enabled else None,
+        "ai_extraction_enabled": settings.ai_extraction_enabled,
+        "ai_analysis_enabled": settings.ai_analysis_enabled,
+        "ai_extraction_model": settings.ai_model_extraction or None,
+        "ai_analysis_model": settings.ai_model_analysis or None,
     }
 
 

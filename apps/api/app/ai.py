@@ -72,10 +72,6 @@ class AIService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
 
-    @property
-    def enabled(self) -> bool:
-        return self.settings.ai_enabled
-
     async def _structured_response(
         self,
         *,
@@ -85,8 +81,8 @@ class AIService:
         schema_name: str,
         schema: dict,
     ) -> dict:
-        if not self.settings.ai_api_key:
-            raise RuntimeError("AI_API_KEY is not configured")
+        if not self.settings.ai_api_key or not model:
+            raise RuntimeError("AI provider or model is not configured")
         url = f"{self.settings.ai_base_url.rstrip('/')}/responses"
         body = {
             "model": model,
@@ -111,7 +107,7 @@ class AIService:
             return json.loads(_output_text(response.json()))
 
     async def extract_source(self, text: str, use_ai: bool = True) -> tuple[SourceExtraction, str]:
-        if use_ai and self.enabled:
+        if use_ai and self.settings.ai_extraction_enabled:
             try:
                 data = await self._structured_response(
                     model=self.settings.ai_model_extraction,
@@ -130,7 +126,7 @@ class AIService:
         return extract_facts_deterministic(text), "deterministic"
 
     async def analyze(self, opportunity: Opportunity) -> tuple[AnalysisResult, str]:
-        if self.enabled:
+        if self.settings.ai_analysis_enabled:
             try:
                 context = opportunity.model_dump_json(indent=2)
                 data = await self._structured_response(

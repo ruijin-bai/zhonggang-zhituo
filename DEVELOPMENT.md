@@ -25,24 +25,22 @@ zhituo-api seed
 uvicorn app.main:app --reload --port 8000
 ```
 
-也可以在首次开发时执行 `zhituo-api init-db` 快速建表并 seed；正式迁移流程以 Alembic 为准。
+首次演示时，数据库中的英雄项目会刻意初始化为 **72/B**。打开 `/intelligence` 导入预置的 S 级融资与采购情报后，评分引擎才会真正把它重评为 **81/A**，并持久化 Evidence、ScoreSnapshot 和 Event。
 
-健康检查：`GET http://127.0.0.1:8000/health`
+如之前已 seed 过最终态 Demo，建议重建本地演示数据库后重新执行迁移与 seed。
 
 ## 3. AI 模型
 
-AI 是可选增强，不是系统单点故障。
-
-在 `.env` 配置：
+AI 是可选增强，不是系统单点故障。模型名不在仓库中硬编码，请按实际可用的 Responses-compatible 模型配置：
 
 ```bash
 AI_API_KEY=...
 AI_BASE_URL=https://api.openai.com/v1
-AI_MODEL_EXTRACTION=gpt-5.6-luna
-AI_MODEL_ANALYSIS=gpt-5.6-terra
+AI_MODEL_EXTRACTION=<your-structured-output-model>
+AI_MODEL_ANALYSIS=<your-analysis-model>
 ```
 
-配置后，来源抽取和项目研判优先走 Responses-compatible Structured Output；模型调用失败或未配置密钥时，会自动退回确定性规则/模板化研判。
+配置后，来源抽取和项目研判优先走 Responses-compatible Structured Output；模型调用失败、未配置密钥或未配置模型时，会自动退回确定性规则/模板化研判。
 
 ## 4. 当前可验证路径
 
