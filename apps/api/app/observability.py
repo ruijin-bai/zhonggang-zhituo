@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 
 from .config import get_settings
+from .http_security import SecurityBoundaryMiddleware
 
 SAFE_ID = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 
@@ -60,6 +61,7 @@ def _safe_external_id(value: str | None) -> str | None:
 def install_observability(app: FastAPI) -> None:
     settings = get_settings()
     logger = logging.getLogger("zhituo.request")
+    app.add_middleware(SecurityBoundaryMiddleware)
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):
