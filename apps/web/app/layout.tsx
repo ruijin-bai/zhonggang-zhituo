@@ -19,10 +19,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </div>
             <nav>
               <Link href="/">经营总览</Link>
+              <Link href="/radar">市场雷达</Link>
               <Link href="/discover">商机发现</Link>
               <Link href="/intelligence">情报重评</Link>
               <Link href="/opportunities">机会池</Link>
-              <span className="nav-disabled">市场雷达 · 即将接入</span>
               <span className="nav-disabled">重点跟踪 · 即将接入</span>
             </nav>
             <div className="sidebar-foot">去哪里 · 追什么 · 怎么拿</div>
