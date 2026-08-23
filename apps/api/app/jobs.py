@@ -32,42 +32,42 @@ def _audit_submission(db: Session, request: Request, principal: Principal, resul
 
 @router.post("/discovery/scan", response_model=JobSubmission, status_code=202)
 def submit_discovery_scan(body: DiscoverRequest, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(discovery_scan_task.delay(body.model_dump(mode="json")), job_type="discovery.scan", principal=principal)
+    result = _submitted(discovery_scan_task.delay(body.model_dump(mode="json"), principal.organization_id), job_type="discovery.scan", principal=principal)
     _audit_submission(db, request, principal, result)
     return result
 
 
 @router.post("/discovery/batch", response_model=JobSubmission, status_code=202)
 def submit_discovery_batch(body: BatchScanRequest, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(discovery_batch_task.delay(body.model_dump(mode="json")), job_type="discovery.batch", principal=principal)
+    result = _submitted(discovery_batch_task.delay(body.model_dump(mode="json"), principal.organization_id), job_type="discovery.batch", principal=principal)
     _audit_submission(db, request, principal, result, {"items": len(body.items)})
     return result
 
 
 @router.post("/sources/ingest", response_model=JobSubmission, status_code=202)
 def submit_source_ingest(body: SourceIngestRequest, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(source_ingest_task.delay(body.model_dump(mode="json")), job_type="source.ingest", principal=principal, resource_id=body.opportunity_id)
+    result = _submitted(source_ingest_task.delay(body.model_dump(mode="json"), principal.organization_id), job_type="source.ingest", principal=principal, resource_id=body.opportunity_id)
     _audit_submission(db, request, principal, result, {"opportunity_id": body.opportunity_id})
     return result
 
 
 @router.post("/opportunities/{opportunity_id}/analyze", response_model=JobSubmission, status_code=202)
 def submit_analysis(opportunity_id: str, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(opportunity_analyze_task.delay(opportunity_id), job_type="opportunity.analyze", principal=principal, resource_id=opportunity_id)
+    result = _submitted(opportunity_analyze_task.delay(opportunity_id, principal.organization_id), job_type="opportunity.analyze", principal=principal, resource_id=opportunity_id)
     _audit_submission(db, request, principal, result, {"opportunity_id": opportunity_id})
     return result
 
 
 @router.post("/opportunities/{opportunity_id}/strategy/generate", response_model=JobSubmission, status_code=202)
 def submit_strategy_generate(opportunity_id: str, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(strategy_generate_task.delay(opportunity_id), job_type="strategy.generate", principal=principal, resource_id=opportunity_id)
+    result = _submitted(strategy_generate_task.delay(opportunity_id, principal.organization_id), job_type="strategy.generate", principal=principal, resource_id=opportunity_id)
     _audit_submission(db, request, principal, result, {"opportunity_id": opportunity_id})
     return result
 
 
 @router.post("/opportunities/{opportunity_id}/strategy/red-team", response_model=JobSubmission, status_code=202)
 def submit_strategy_red_team(opportunity_id: str, request: Request, db: Session = Depends(get_db), principal: Principal = Depends(require_role("analyst"))) -> JobSubmission:
-    result = _submitted(strategy_red_team_task.delay(opportunity_id), job_type="strategy.red_team", principal=principal, resource_id=opportunity_id)
+    result = _submitted(strategy_red_team_task.delay(opportunity_id, principal.organization_id), job_type="strategy.red_team", principal=principal, resource_id=opportunity_id)
     _audit_submission(db, request, principal, result, {"opportunity_id": opportunity_id})
     return result
 
