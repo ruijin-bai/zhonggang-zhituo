@@ -23,6 +23,37 @@ jobs:
 
   api:
     runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      DATA_BACKEND: database
+      DATABASE_URL: postgresql+psycopg://zhituo:zhituo@127.0.0.1:5432/zhituo
+      JOB_MODE: queue
+      REDIS_URL: redis://127.0.0.1:6379/0
+      DEMO_MODE: "true"
+      ALLOW_DEMO_FALLBACK: "true"
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: zhituo
+          POSTGRES_USER: zhituo
+          POSTGRES_PASSWORD: zhituo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U zhituo -d zhituo"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     defaults:
       run:
         working-directory: apps/api
@@ -33,4 +64,17 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install --upgrade pip
       - run: pip install -e '.[dev]'
-      - run: pytest -q
+      - name: Verify dependency graph
+        run: pip check
+      - name: Compile Python sources
+        run: python -m compileall -q app
+      - name: Run unit and integration tests
+        run: pytest -q
+      - name: Apply database migrations on clean PostgreSQL
+        run: alembic upgrade head
+      - name: Verify Redis connectivity
+        run: python -c "from redis import Redis; assert Redis.from_url('redis://127.0.0.1:6379/0').ping()"
+      - name: Verify repeatable demo seed and CLI
+        run: |
+          zhituo-api reset-demo
+          zhituo-api status
