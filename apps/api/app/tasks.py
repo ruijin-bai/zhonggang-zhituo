@@ -4,7 +4,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from .ai import AIService
 from .celery_app import celery_app
-from .db import SessionLocal
+from .db import SessionLocal, set_tenant_context
 from .discovery import discover
 from .ingestion import ingest_source
 from .models import DiscoverRequest, SourceIngestRequest
@@ -20,7 +20,7 @@ def _json(model):
 
 def _tenant_session(organization_id: str):
     session = SessionLocal()
-    session.info["organization_id"] = organization_id
+    set_tenant_context(session, organization_id)
     return session
 
 
