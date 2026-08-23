@@ -4,7 +4,7 @@ from .models import ExtractedFact, SourceExtraction
 
 
 FINANCING_RULES: list[tuple[tuple[str, ...], str, int, float]] = [
-    (("loan approved", "financing approved", "approved financing", "贷款获批", "融资获批", "批准贷款", "董事会批准"), "已获批或预算落实", 15, 0.96),
+    (("has received financing", "received financing from", "loan approved", "financing approved", "approved financing", "贷款获批", "融资获批", "批准贷款", "董事会批准", "已获得融资"), "已获批或融资落实", 15, 0.96),
     (("financing agreement", "loan agreement", "融资框架", "贷款协议", "贷款谈判", "融资谈判"), "融资框架/贷款谈判明确", 11, 0.88),
     (("financial institution", "financier engagement", "金融机构接触", "融资接触"), "已与金融机构接触", 8, 0.78),
 ]
