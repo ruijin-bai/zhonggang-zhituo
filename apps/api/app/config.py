@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     demo_mode: bool = True
     allow_demo_fallback: bool = True
+    dev_user_email: str = "admin@zhituo.local"
 
     ai_base_url: str = "https://api.openai.com/v1"
     ai_api_key: str | None = None
@@ -32,6 +33,8 @@ class Settings(BaseSettings):
                 raise ValueError("production requires ALLOW_DEMO_FALLBACK=false")
             if "127.0.0.1" in self.database_url or "localhost" in self.database_url:
                 raise ValueError("production DATABASE_URL must point to an explicit production database service")
+            if self.dev_user_email != "admin@zhituo.local":
+                raise ValueError("DEV_USER_EMAIL is a development-only setting")
         return self
 
     @property
