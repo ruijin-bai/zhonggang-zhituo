@@ -236,10 +236,12 @@ def _tenant_filter(execute_state) -> None:
         return
     statement = execute_state.statement
     for model in TENANT_MODELS:
+        # Use an explicit SQL expression instead of a closure-based lambda. This avoids
+        # SQLAlchemy lambda SQL caching a prior tenant value across sessions.
         statement = statement.options(
             with_loader_criteria(
                 model,
-                lambda cls, org=organization_id: cls.organization_id == org,
+                model.organization_id == organization_id,
                 include_aliases=True,
             )
         )
