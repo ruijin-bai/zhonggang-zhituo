@@ -44,8 +44,6 @@ def _resolve_identity(
         return x_zhituo_user.strip().lower()
 
     if settings.app_env == "production":
-        # Defense in depth: production configuration validation should already reject this,
-        # but never allow a direct identity header if a misconfigured process starts.
         raise HTTPException(status_code=503, detail="Production authentication is not configured safely")
 
     identity = x_zhituo_user or settings.dev_user_email
@@ -83,8 +81,6 @@ def get_principal(
     if not memberships:
         raise HTTPException(status_code=403, detail="User has no active organization membership")
     if len(memberships) > 1:
-        # Until explicit organization selection is implemented, silently choosing one tenant
-        # is unsafe. Fail closed rather than risking cross-tenant access.
         raise HTTPException(status_code=409, detail="Multiple organization memberships require explicit organization selection")
 
     membership = memberships[0]
@@ -100,6 +96,9 @@ def get_principal(
         organization_name=organization.name,
         role=membership.role,
     )
+    # All ORM reads/writes made with this request-scoped Session are automatically
+    # constrained to the authenticated organization by db.py tenant guards.
+    db.info["organization_id"] = organization.id
     request.state.principal = principal
     return principal
 
