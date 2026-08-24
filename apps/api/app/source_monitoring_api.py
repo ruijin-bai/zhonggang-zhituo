@@ -173,14 +173,19 @@ async def scan_source_subscription_now(
     principal: Principal = Depends(require_role("manager")),
 ) -> dict:
     try:
-        record = claim_manual_scan(db, subscription_id)
+        record, lease_token = claim_manual_scan(db, subscription_id)
     except ValueError as exc:
         if "in progress" in str(exc).lower():
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         raise _not_found(exc) from exc
 
     if settings.job_mode == "inline":
-        result = await scan_subscription(db, record.id, manual=True)
+        result = await scan_subscription(
+            db,
+            record.id,
+            manual=True,
+            lease_token=lease_token,
+        )
         _audit(
             db,
             request,
@@ -194,7 +199,7 @@ async def scan_source_subscription_now(
     task_id = str(uuid4())
     try:
         source_subscription_scan_task.apply_async(
-            args=(record.id, principal.organization_id, True),
+            args=(record.id, principal.organization_id, True, lease_token),
             task_id=task_id,
             headers={
                 "request_id": getattr(request.state, "request_id", None),
@@ -203,7 +208,12 @@ async def scan_source_subscription_now(
             },
         )
     except Exception as exc:
-        release_dispatch_claim(db, record.id, str(exc))
+        release_dispatch_claim(
+            db,
+            record.id,
+            str(exc),
+            lease_token=lease_token,
+        )
         raise HTTPException(status_code=503, detail="source scan dispatch failed") from exc
 
     _audit(
