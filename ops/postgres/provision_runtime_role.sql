@@ -62,6 +62,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     pursuit_gate_reviews,
     pursuit_decision_records,
     pursuit_reminders,
+    pursuit_reminder_deliveries,
     idempotency_records,
     background_jobs,
     source_fetches,
