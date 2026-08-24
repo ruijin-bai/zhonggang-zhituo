@@ -37,6 +37,7 @@ def test_production_accepts_explicit_queue_services() -> None:
     assert settings.data_backend == "database"
     assert settings.auth_mode == "trusted_proxy"
     assert settings.document_store_backend == "s3"
+    assert settings.source_scan_lease_seconds > settings.celery_task_time_limit_seconds
 
 
 def test_production_rejects_local_document_storage() -> None:
@@ -50,4 +51,19 @@ def test_production_rejects_insecure_custom_s3_endpoint() -> None:
     values = _production_values()
     values["document_store_s3_endpoint_url"] = "http://object-store.internal:9000"
     with pytest.raises(ValidationError, match="custom S3 endpoint must use HTTPS"):
+        Settings(**values)
+
+
+def test_source_scan_lease_must_exceed_worker_hard_timeout() -> None:
+    values = _production_values()
+    values["celery_task_time_limit_seconds"] = 180
+    values["source_scan_lease_seconds"] = 180
+    with pytest.raises(ValidationError, match="SOURCE_SCAN_LEASE_SECONDS"):
+        Settings(**values)
+
+
+def test_source_scan_minimum_interval_rejects_hot_loop() -> None:
+    values = _production_values()
+    values["source_scan_min_interval_seconds"] = 30
+    with pytest.raises(ValidationError, match="SOURCE_SCAN_MIN_INTERVAL_SECONDS"):
         Settings(**values)

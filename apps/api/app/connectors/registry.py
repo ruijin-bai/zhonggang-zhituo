@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .base import ConnectorResult, SourceConnector
+from .base import ConnectorFetchOutcome, ConnectorResult, SourceConnector
 from .html import HtmlConnector
 from .pdf import PdfConnector
 from .rss import RssConnector
@@ -27,3 +27,17 @@ def get_connector(kind: str) -> SourceConnector:
 
 async def fetch_documents(kind: str, url: str) -> ConnectorResult:
     return await get_connector(kind).fetch(url)
+
+
+async def fetch_documents_conditional(
+    kind: str,
+    url: str,
+    *,
+    if_none_match: str | None = None,
+    if_modified_since: str | None = None,
+) -> ConnectorFetchOutcome:
+    return await get_connector(kind).fetch_conditional(
+        url,
+        if_none_match=if_none_match,
+        if_modified_since=if_modified_since,
+    )

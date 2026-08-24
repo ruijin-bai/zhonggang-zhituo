@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, event
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, Session, mapped_column, with_loader_criteria
 
 from .db import Base, TenantScopedMixin, utc_now
@@ -72,7 +72,71 @@ class SourceDocumentRecord(TenantScopedMixin, Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
 
-_SOURCE_TENANT_MODELS = (SourceFetchRecord, SourceDocumentRecord)
+class SourceSubscriptionRecord(TenantScopedMixin, Base):
+    __tablename__ = "source_subscriptions"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "connector",
+            "url_hash",
+            name="uq_source_subscription_org_connector_url",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(240))
+    connector: Mapped[str] = mapped_column(String(32), index=True)
+    url: Mapped[str] = mapped_column(Text)
+    url_hash: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    pause_reason: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    interval_seconds: Mapped[int] = mapped_column(Integer)
+    next_scan_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    lease_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    etag: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    last_modified: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
+    total_scans: Mapped[int] = mapped_column(Integer, default=0)
+    total_changes: Mapped[int] = mapped_column(Integer, default=0)
+    last_scan_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_outcome: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class SourceScanRunRecord(TenantScopedMixin, Base):
+    __tablename__ = "source_scan_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    subscription_id: Mapped[str] = mapped_column(
+        ForeignKey("source_subscriptions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    outcome: Mapped[str] = mapped_column(String(40), index=True)
+    fetch_id: Mapped[str | None] = mapped_column(
+        ForeignKey("source_fetches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    manual: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    not_modified: Mapped[bool] = mapped_column(Boolean, default=False)
+    documents_seen: Mapped[int] = mapped_column(Integer, default=0)
+    documents_created: Mapped[int] = mapped_column(Integer, default=0)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+_SOURCE_TENANT_MODELS = (
+    SourceFetchRecord,
+    SourceDocumentRecord,
+    SourceSubscriptionRecord,
+    SourceScanRunRecord,
+)
 
 
 @event.listens_for(Session, "do_orm_execute")

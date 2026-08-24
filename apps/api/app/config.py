@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     allow_demo_fallback: bool = True
     dev_user_email: str = "admin@zhituo.local"
 
-    # Identity: development header, trusted enterprise gateway, or direct OIDC JWT.
     auth_mode: Literal["development_header", "trusted_proxy", "oidc"] = "development_header"
     auth_proxy_secret: str | None = None
     oidc_issuer: str = ""
@@ -31,8 +30,6 @@ class Settings(BaseSettings):
     idempotency_ttl_seconds: int = 86400
     job_stuck_after_seconds: int = 300
 
-    # Content-addressed document storage. Production uses S3-compatible object storage;
-    # local is intentionally limited to development/test.
     document_store_backend: Literal["local", "s3"] = "local"
     document_store_local_path: str = "./data/objects"
     document_store_s3_bucket: str = ""
@@ -42,20 +39,26 @@ class Settings(BaseSettings):
     document_store_s3_sse: Literal["", "AES256", "aws:kms"] = ""
     document_store_s3_kms_key_id: str = ""
 
-    # Observability. Metrics are opt-in so an internal endpoint is never exposed accidentally.
+    # Scheduled source monitoring. Beat only dispatches due work; each subscription scan runs
+    # as its own worker task and owns a durable lease/health record in PostgreSQL.
+    source_scan_dispatch_interval_seconds: int = 60
+    source_scan_min_interval_seconds: int = 300
+    source_scan_lease_seconds: int = 300
+    source_scan_max_backoff_seconds: int = 86_400
+    source_scan_auto_pause_failures: int = 8
+    source_scan_dispatch_batch_size: int = 50
+
     log_level: str = "INFO"
     request_id_header: str = "X-Request-ID"
     correlation_id_header: str = "X-Correlation-ID"
     metrics_enabled: bool = False
     metrics_token: str | None = None
 
-    # HTTP/application security. The ingress must still enforce independent limits.
     max_request_body_bytes: int = 2_000_000
     security_headers_enabled: bool = True
     hsts_max_age_seconds: int = 31_536_000
     authenticated_rate_limit_per_minute: int = 300
 
-    # Database-side tenant isolation.
     database_rls_enabled: bool = True
 
     ai_base_url: str = "https://api.openai.com/v1"
@@ -83,6 +86,18 @@ class Settings(BaseSettings):
             raise ValueError("JOB_STUCK_AFTER_SECONDS must exceed CELERY_TASK_TIME_LIMIT_SECONDS")
         if self.document_store_s3_sse == "aws:kms" and not self.document_store_s3_kms_key_id:
             raise ValueError("aws:kms document storage requires DOCUMENT_STORE_S3_KMS_KEY_ID")
+        if self.source_scan_dispatch_interval_seconds < 10:
+            raise ValueError("SOURCE_SCAN_DISPATCH_INTERVAL_SECONDS must be at least 10")
+        if self.source_scan_min_interval_seconds < 60:
+            raise ValueError("SOURCE_SCAN_MIN_INTERVAL_SECONDS must be at least 60")
+        if self.source_scan_lease_seconds <= self.celery_task_time_limit_seconds:
+            raise ValueError("SOURCE_SCAN_LEASE_SECONDS must exceed CELERY_TASK_TIME_LIMIT_SECONDS")
+        if self.source_scan_max_backoff_seconds < self.source_scan_min_interval_seconds:
+            raise ValueError("SOURCE_SCAN_MAX_BACKOFF_SECONDS must not be below minimum interval")
+        if self.source_scan_auto_pause_failures < 1:
+            raise ValueError("SOURCE_SCAN_AUTO_PAUSE_FAILURES must be at least 1")
+        if not 1 <= self.source_scan_dispatch_batch_size <= 500:
+            raise ValueError("SOURCE_SCAN_DISPATCH_BATCH_SIZE must be between 1 and 500")
 
         if self.app_env == "production":
             if self.data_backend != "database":

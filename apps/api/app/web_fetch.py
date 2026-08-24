@@ -17,6 +17,13 @@ class PublicResource:
     content_type: str
     body: bytes
     encoding: str
+    status_code: int = 200
+    etag: str | None = None
+    last_modified: str | None = None
+
+    @property
+    def not_modified(self) -> bool:
+        return self.status_code == 304
 
 
 class _TextExtractor(HTMLParser):
@@ -122,14 +129,20 @@ async def fetch_public_resource(
     max_bytes: int,
     accept: str = "*/*",
     timeout_seconds: float = 20.0,
+    if_none_match: str | None = None,
+    if_modified_since: str | None = None,
 ) -> PublicResource:
     """Fetch a bounded public resource while preserving the existing SSRF boundary."""
 
     current = validate_public_url(url)
     headers = {
-        "User-Agent": "Zhonggang-Zhituo/0.14 (+market-intelligence; public-source-reader)",
+        "User-Agent": "Zhonggang-Zhituo/0.16 (+market-intelligence; public-source-reader)",
         "Accept": accept,
     }
+    if if_none_match:
+        headers["If-None-Match"] = if_none_match
+    if if_modified_since:
+        headers["If-Modified-Since"] = if_modified_since
 
     async with httpx.AsyncClient(
         timeout=timeout_seconds,
@@ -145,6 +158,19 @@ async def fetch_public_resource(
                     current = validate_public_url(urljoin(current, location))
                     continue
 
+                response_etag = response.headers.get("etag")
+                response_last_modified = response.headers.get("last-modified")
+                if response.status_code == 304:
+                    return PublicResource(
+                        url=current,
+                        content_type="",
+                        body=b"",
+                        encoding="utf-8",
+                        status_code=304,
+                        etag=response_etag or if_none_match,
+                        last_modified=response_last_modified or if_modified_since,
+                    )
+
                 response.raise_for_status()
                 body = bytearray()
                 async for chunk in response.aiter_bytes():
@@ -159,12 +185,17 @@ async def fetch_public_resource(
                     content_type=content_type,
                     body=bytes(body),
                     encoding=response.encoding or "utf-8",
+                    status_code=response.status_code,
+                    etag=response_etag,
+                    last_modified=response_last_modified,
                 )
 
     raise ValueError("网页重定向次数过多")
 
 
 def extract_page_text(resource: PublicResource) -> tuple[str, str]:
+    if resource.not_modified:
+        raise ValueError("304 Not Modified 响应没有可解析正文")
     content_type = resource.content_type
     if content_type and not any(kind in content_type for kind in ALLOWED_CONTENT_TYPES):
         raise ValueError("当前 URL 不是可解析的公开网页文本")

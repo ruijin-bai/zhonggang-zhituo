@@ -35,10 +35,27 @@ class ConnectorResult(BaseModel):
     raw_objects: dict[str, bytes] = Field(default_factory=dict, exclude=True, repr=False)
 
 
+class ConnectorFetchOutcome(BaseModel):
+    connector: str
+    source_url: str
+    not_modified: bool = False
+    etag: str | None = None
+    last_modified: str | None = None
+    result: ConnectorResult | None = None
+
+
 class SourceConnector(Protocol):
     kind: str
 
     async def fetch(self, url: str) -> ConnectorResult: ...
+
+    async def fetch_conditional(
+        self,
+        url: str,
+        *,
+        if_none_match: str | None = None,
+        if_modified_since: str | None = None,
+    ) -> ConnectorFetchOutcome: ...
 
 
 def build_document(
