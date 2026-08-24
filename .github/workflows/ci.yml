@@ -140,6 +140,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate production Compose topology
+        run: |
+          : > /tmp/zhituo-api.env
+          : > /tmp/zhituo-web.env
+          ZHITUO_API_IMAGE=zhituo-api:ci \
+          ZHITUO_WEB_IMAGE=zhituo-web:ci \
+          ZHITUO_API_ENV_FILE=/tmp/zhituo-api.env \
+          ZHITUO_WEB_ENV_FILE=/tmp/zhituo-web.env \
+          docker compose -f deploy/docker-compose.production.yml config --quiet
       - name: Build API production image
         run: docker build --pull -t zhituo-api:ci apps/api
       - name: Smoke import API production image
