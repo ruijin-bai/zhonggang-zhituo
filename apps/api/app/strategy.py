@@ -38,6 +38,8 @@ class StakeholderInput(BaseModel):
 
 
 class StrategyUpsert(BaseModel):
+    # Clients must submit the version returned by GET. V0 means no persisted strategy yet.
+    expected_version: int = Field(ge=0)
     win_theme: str = ""
     client_need: str = ""
     differentiation: list[str] = Field(default_factory=list)
@@ -183,11 +185,12 @@ def save_strategy(
         raise ValueError("机会不存在")
 
     current_version = _strategy_version(opportunity_id, session)
-    if expected_version is not None and expected_version != current_version:
+    required_version = payload.expected_version if expected_version is None else expected_version
+    if required_version != current_version:
         session.rollback()
-        raise StrategyVersionConflict(expected_version, current_version)
+        raise StrategyVersionConflict(required_version, current_version)
 
-    data = payload.model_dump()
+    data = payload.model_dump(exclude={"expected_version"})
     data["updated_at"] = datetime.now(timezone.utc).isoformat()
     data["version"] = current_version + 1
     session.add(
