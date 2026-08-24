@@ -22,6 +22,15 @@ from .db import (
     WatchItemRecord,
 )
 from .models import Opportunity, ScoreBreakdown
+from .pursuit_db import (
+    PursuitDecisionGateRecord,
+    PursuitDecisionRecord,
+    PursuitGateReviewRecord,
+    PursuitParticipantRecord,
+    PursuitWorkItemRecord,
+    PursuitWorkspaceRecord,
+)
+from .pursuit_legacy import sync_legacy_tracking_snapshot
 from .scoring import calculate_score
 
 DATA_FILE = Path(__file__).resolve().parents[3] / "data" / "demo" / "opportunities.json"
@@ -55,12 +64,40 @@ def _seed_identity(session: Session) -> str:
     return org.id
 
 
+def _delete_demo_pursuit(session: Session, demo_ids: list[str]) -> None:
+    if not demo_ids:
+        return
+    workspace_ids = list(
+        session.scalars(
+            select(PursuitWorkspaceRecord.id).where(
+                PursuitWorkspaceRecord.opportunity_id.in_(demo_ids)
+            )
+        ).all()
+    )
+    gate_ids = list(
+        session.scalars(
+            select(PursuitDecisionGateRecord.id).where(
+                PursuitDecisionGateRecord.opportunity_id.in_(demo_ids)
+            )
+        ).all()
+    )
+    if gate_ids:
+        session.execute(delete(PursuitDecisionRecord).where(PursuitDecisionRecord.gate_id.in_(gate_ids)))
+        session.execute(delete(PursuitGateReviewRecord).where(PursuitGateReviewRecord.gate_id.in_(gate_ids)))
+        session.execute(delete(PursuitDecisionGateRecord).where(PursuitDecisionGateRecord.id.in_(gate_ids)))
+    session.execute(delete(PursuitWorkItemRecord).where(PursuitWorkItemRecord.opportunity_id.in_(demo_ids)))
+    if workspace_ids:
+        session.execute(delete(PursuitParticipantRecord).where(PursuitParticipantRecord.workspace_id.in_(workspace_ids)))
+        session.execute(delete(PursuitWorkspaceRecord).where(PursuitWorkspaceRecord.id.in_(workspace_ids)))
+
+
 def reset_demo_data(session: Session) -> int:
     """Delete demo business data only, preserving all non-demo/public records and identities."""
     previous_org = session.info.pop("organization_id", None)
     try:
         demo_ids = list(session.scalars(select(OpportunityRecord.id).where(OpportunityRecord.is_demo.is_(True))).all())
         if demo_ids:
+            _delete_demo_pursuit(session, demo_ids)
             for model in (
                 AIAnalysisRecord,
                 PursuitAlertRecord,
@@ -172,22 +209,22 @@ def seed_demo_data(session: Session) -> int:
         hero = session.get(OpportunityRecord, HERO_ID)
         if hero and session.scalar(select(WatchItemRecord).where(WatchItemRecord.opportunity_id == HERO_ID)) is None:
             now = datetime.now(timezone.utc)
-            session.add(
-                WatchItemRecord(
-                    opportunity_id=HERO_ID,
-                    priority="high",
-                    owner="市场经营负责人",
-                    rationale="港航及交通能力匹配，融资与采购窗口值得重点跟踪。",
-                    next_review_at=now + timedelta(days=7),
-                )
+            watch = WatchItemRecord(
+                opportunity_id=HERO_ID,
+                priority="high",
+                owner="市场经营负责人",
+                rationale="港航及交通能力匹配，融资与采购窗口值得重点跟踪。",
+                next_review_at=now + timedelta(days=7),
             )
-            session.add_all(
-                [
-                    PursuitActionRecord(opportunity_id=HERO_ID, title="核实采购模式与预计招标时间", owner="市场经理", priority="high", due_at=now + timedelta(days=5), note="确认采购路径及资格预审时间。"),
-                    PursuitActionRecord(opportunity_id=HERO_ID, title="梳理业主与融资方决策链", owner="区域团队", priority="high", due_at=now + timedelta(days=8), note="只记录可验证机构和正式角色。"),
-                    PursuitActionRecord(opportunity_id=HERO_ID, title="形成港口+疏港交通一体化方案摘要", owner="技术经营组", priority="high", due_at=now + timedelta(days=10), note="把综合交付能力转化为客户价值。"),
-                ]
-            )
+            actions = [
+                PursuitActionRecord(opportunity_id=HERO_ID, title="核实采购模式与预计招标时间", owner="市场经理", priority="high", due_at=now + timedelta(days=5), note="确认采购路径及资格预审时间。"),
+                PursuitActionRecord(opportunity_id=HERO_ID, title="梳理业主与融资方决策链", owner="区域团队", priority="high", due_at=now + timedelta(days=8), note="只记录可验证机构和正式角色。"),
+                PursuitActionRecord(opportunity_id=HERO_ID, title="形成港口+疏港交通一体化方案摘要", owner="技术经营组", priority="high", due_at=now + timedelta(days=10), note="把综合交付能力转化为客户价值。"),
+            ]
+            session.add(watch)
+            session.add_all(actions)
+            session.flush()
+            sync_legacy_tracking_snapshot(session, HERO_ID)
             v1 = {
                 "win_theme": "依托港航与交通综合能力参与项目经营，重点验证融资与采购窗口。",
                 "client_need": "提升港区集疏运效率并形成可实施的交通基础设施方案。",
