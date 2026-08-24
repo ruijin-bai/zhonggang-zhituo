@@ -29,11 +29,14 @@ class Settings(BaseSettings):
     celery_task_soft_time_limit_seconds: int = 90
     celery_task_time_limit_seconds: int = 120
     idempotency_ttl_seconds: int = 86400
+    job_stuck_after_seconds: int = 300
 
     # Observability.
     log_level: str = "INFO"
     request_id_header: str = "X-Request-ID"
     correlation_id_header: str = "X-Correlation-ID"
+    metrics_enabled: bool = True
+    metrics_token: str | None = None
 
     # HTTP/application security. The ingress must still enforce independent limits.
     max_request_body_bytes: int = 2_000_000
@@ -65,6 +68,8 @@ class Settings(BaseSettings):
             raise ValueError("MAX_REQUEST_BODY_BYTES must be between 64000 and 20000000")
         if self.authenticated_rate_limit_per_minute < 0:
             raise ValueError("AUTHENTICATED_RATE_LIMIT_PER_MINUTE cannot be negative")
+        if self.job_stuck_after_seconds <= self.celery_task_time_limit_seconds:
+            raise ValueError("JOB_STUCK_AFTER_SECONDS must exceed CELERY_TASK_TIME_LIMIT_SECONDS")
 
         if self.app_env == "production":
             if self.data_backend != "database":
@@ -91,6 +96,8 @@ class Settings(BaseSettings):
                 raise ValueError("production requires DATABASE_RLS_ENABLED=true")
             if self.authenticated_rate_limit_per_minute <= 0:
                 raise ValueError("production requires AUTHENTICATED_RATE_LIMIT_PER_MINUTE > 0")
+            if self.metrics_enabled and (not self.metrics_token or len(self.metrics_token) < 32):
+                raise ValueError("production metrics require METRICS_TOKEN with at least 32 characters")
             if "127.0.0.1" in self.database_url or "localhost" in self.database_url:
                 raise ValueError("production DATABASE_URL must point to an explicit production database service")
             if "127.0.0.1" in self.redis_url or "localhost" in self.redis_url:
