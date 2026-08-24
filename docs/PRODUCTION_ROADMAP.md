@@ -2,155 +2,200 @@
 
 > 产品目标：面向海外工程企业的 AI 市场情报与经营决策平台。
 
-智拓不再以“比赛 Demo”作为最终架构约束。比赛展示保留为独立 Demo Mode；主线按可持续运行、真实数据、多人协同和企业治理推进。
+智拓不再以比赛 Demo 作为最终架构约束。比赛展示保留为独立 Demo Mode；主线按真实数据、持续运行、多人协同和企业治理推进。
 
 ## 1. 核心经营闭环
 
 **持续感知全球市场 → 自动发现项目机会 → 建立证据链 → 评估经营价值 → 形成经营策略 → 驱动跟踪行动 → 沉淀企业市场资产**
 
-产品仍围绕三个管理问题组织：
+产品围绕三个管理问题组织：
 
 1. **去哪里（Where to Play）**：国别、区域、行业、资金来源与市场活跃度。
 2. **追什么（What to Pursue）**：项目成熟度、融资、客户、竞争、能力匹配、风险和证据置信度。
 3. **怎么拿（How to Win）**：客户诉求、竞争策略、伙伴策略、赢标主张、红队挑战、责任人与行动计划。
 
-## 2. 环境隔离
+## 2. 当前阶段：Production Alpha
+
+### Foundation — 已完成
+
+- [x] Next.js Web + FastAPI API
+- [x] PostgreSQL + Alembic
+- [x] Redis + Celery Worker + Beat
+- [x] Opportunity / Source / Evidence / ScoreSnapshot / Event
+- [x] 市场雷达、商机发现、人工确认、动态重评
+- [x] Strategy / Tracking / Battlecard 基础经营链
+- [x] Demo / Development / Production 配置隔离
+- [x] User / Organization / RBAC
+- [x] trusted proxy + OIDC JWT 身份适配
+- [x] SQLAlchemy Tenant Scope + PostgreSQL RLS
+- [x] runtime / migration / backup 数据库角色拆分
+- [x] Queue Idempotency + 关键同步写操作幂等
+- [x] Strategy optimistic concurrency
+- [x] Durable Background Job Ledger + retry lineage
+- [x] Stuck Job Reconciler
+- [x] JSON 日志、Request ID、Correlation ID
+- [x] Prometheus metrics、首版 SLO 和告警规则
+- [x] PostgreSQL backup / restore drill
+- [x] Web/API production image + production Compose
+- [x] Python/Web dependency audit + CycloneDX SBOM
+- [x] npm workspace lock + Python uv lock
+- [x] `zhituo/ci-gate` 自动质量门禁
+
+Foundation 完成后，除明确的高风险缺陷外，不再优先投入“为了更像大系统”的基础设施建设。工程资源转向真实数据、知识资产和经营闭环。
+
+## 3. Alpha-1 — 外部市场感知与原件资产化
+
+### A. Source Connector Foundation — 当前实现
+
+- [x] 统一 `SourceDocument` 契约
+- [x] Connector Registry
+- [x] HTML / Text Connector
+- [x] RSS / Atom Connector
+- [x] PDF Connector
+- [x] 流式下载与字节上限
+- [x] 公开 URL / redirect SSRF 边界复用
+- [x] 内容 SHA-256 / 原件 SHA-256
+- [x] 首批 Connector 单元测试
+- [ ] OCR Connector / OCR Worker
+- [ ] 采购平台/API 专用 Connector
+
+### B. Object Storage — 下一大步
+
+- [ ] `DocumentStore` 抽象
+- [ ] 本地开发实现
+- [ ] S3-compatible 生产实现
+- [ ] 以 `raw_sha256` 进行内容寻址
+- [ ] 原始 HTML / PDF / XML / JSON 持久化
+- [ ] MIME / size / fetched_at / ETag / Last-Modified 元数据
+- [ ] 相同原件不重复写入
+- [ ] PostgreSQL 仅保存对象引用和结构化索引
+
+### C. Scheduled Source Scan
+
+- [ ] Source Feed / Connector Configuration 模型
+- [ ] 调度周期、启停、抓取状态
+- [ ] ETag / If-Modified-Since 增量抓取
+- [ ] 单源失败隔离与重试
+- [ ] 抓取成功率、延迟和新文档量指标
+- [ ] 管理员 Source Health 视图
+
+## 4. Alpha-2 — Candidate Opportunity Pipeline
+
+目标：让系统从“读文档”升级为“持续产生可审核的候选商机”。
+
+```text
+Source Scan
+  ↓
+SourceDocument
+  ↓
+Object Storage / Hash Dedup
+  ↓
+Project Detection
+  ↓
+Entity Resolution
+  ↓
+Candidate Opportunity
+  ↓
+AI 初筛 + Evidence
+  ↓
+人工确认
+  ↓
+正式 Opportunity
+```
+
+### P0
+
+- [ ] canonical URL + hash 双重去重
+- [ ] 同一项目跨来源聚合
+- [ ] Candidate Opportunity 独立状态模型
+- [ ] 来源增量触发项目重评
+- [ ] Candidate → Confirmed 审计链
+- [ ] 重复项目合并/关联操作
+- [ ] “为什么识别成商机”证据解释
+
+## 5. Alpha-3 — Entity / Search / Knowledge Layer
+
+### 实体化
+
+- [ ] Client / Owner
+- [ ] Financier
+- [ ] Competitor
+- [ ] Partner
+- [ ] Country / Region
+- [ ] Project / Opportunity
+
+### Entity Resolution
+
+- [ ] Alias
+- [ ] 名称规范化
+- [ ] 同一机构跨来源合并
+- [ ] 人工纠错和合并历史
+
+### Search / Knowledge
+
+- [ ] 全局检索
+- [ ] 项目时间线
+- [ ] 国别知识页
+- [ ] 客户画像与历史项目
+- [ ] 竞争对手画像
+- [ ] Evidence 可回到原始文档位置
+- [ ] 历史经营策略与结果可复盘
+
+短期继续使用 PostgreSQL；只有实体关系规模和查询模式证明需要时，再引入专门图数据库或向量检索服务。
+
+## 6. Alpha-4 — 真实经营协同
+
+- [ ] Action 绑定真实负责人账号
+- [ ] Deadline / Status / Reminder
+- [ ] Alert routing
+- [ ] Go / No-Go 审批与留痕
+- [ ] 管理层 Portfolio / Resource Allocation
+- [ ] Audit 查询与导出 UI
+- [ ] Failed / Dead Letter Job 管理 UI
+- [ ] Organization / Team / Member 管理 UI
+- [ ] 邮件 / OA / 企业协同通知接口
+
+## 7. Beta — 企业治理与规模化
+
+- [ ] Region / Team 细粒度权限继承
+- [ ] Prompt / Schema / Model Version Governance
+- [ ] AI 成本、延迟、失败率治理
+- [ ] 数据质量 SLA
+- [ ] 数据保留、删除、导出和合规策略
+- [ ] Secret Manager / KMS 与自动轮换
+- [ ] Container CVE scan / image signing / provenance
+- [ ] Expand-Migrate-Contract 数据库迁移规范
+- [ ] Canary / rolling deploy / rollback gate
+- [ ] PostgreSQL / Redis 高可用
+- [ ] 跨区域灾备（有明确业务需求后）
+
+## 8. 环境原则
 
 ### Demo / Development
 
-- `APP_ENV=development`
+允许：
+
 - `DEMO_MODE=true`
 - `ALLOW_DEMO_FALLBACK=true`
-- `NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=true`
 - `DATA_BACKEND=auto`
 - `JOB_MODE=inline` 或 `queue`
 
-允许数据库未启动时使用内置 Demo 数据；开发者可选择同步调试或完整 Redis/Celery 异步链路。
-
 ### Production
+
+必须：
 
 - `APP_ENV=production`
 - `DEMO_MODE=false`
 - `ALLOW_DEMO_FALLBACK=false`
-- `NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=false`
 - `DATA_BACKEND=database`
 - `JOB_MODE=queue`
+- `DATABASE_RLS_ENABLED=true`
 
-生产环境禁止静默回退 Demo 数据，禁止同步执行网页抓取、情报抽取和 AI 长任务。API/数据库/Worker 故障必须显式失败并进入监控。
+生产故障必须显式失败并进入监控，不得静默展示 Demo 数据。
 
-## 3. Production Alpha
+## 9. Production Definition of Done
 
-目标：让系统连续处理真实公开信息，并由真实用户完成一次完整经营闭环。
-
-### P0 — 必须完成
-
-- [x] PostgreSQL + Alembic 数据模型
-- [x] Source / Evidence / Opportunity / ScoreSnapshot / Event
-- [x] 商机发现与人工确认
-- [x] 动态重评
-- [x] 市场雷达
-- [x] 跟踪 / 策略 / 作战卡基础链路
-- [x] Demo 与 Production fallback 隔离
-- [x] 用户身份与基础 RBAC
-- [x] Organization 基础模型与 Job 组织隔离
-- [x] Audit Log 基础能力
-- [x] Redis + Celery 后台任务队列
-- [x] 采集、情报抽取、AI 研判、策略生成和红队任务不阻塞生产 HTTP 请求
-- [ ] Region / Team 细粒度数据隔离
-- [ ] 企业 SSO / OIDC 身份接入
-- [ ] 生产部署配置与 Secrets 管理
-- [ ] API 请求日志、错误追踪与 Worker 可观测性
-- [ ] 数据库自动备份与恢复演练
-- [ ] Source Connector：RSS / 官方公告页 / API / PDF
-- [ ] 文档原件存储与内容哈希去重
-- [ ] 真实经营 Action：负责人账号、截止时间、状态、提醒
-
-### P1 — Internal Pilot
-
-- [ ] 客户、竞争对手、合作伙伴独立实体模型
-- [ ] Entity Resolution：同一机构跨来源合并
-- [ ] 全局检索
-- [ ] 项目时间线
-- [ ] 国别知识页
-- [ ] 客户画像与历史项目关系
-- [ ] 竞争对手画像
-- [ ] 人工评分调整必须记录理由和操作者
-- [ ] AI Prompt / Model / Output 版本审计
-- [ ] Evidence 引用可回到原始文档位置
-- [ ] 邮件/企业协同工具通知接口
-
-### P2 — Production Beta
-
-- [ ] 审批流与 Go / No-Go 决策留痕
-- [ ] 管理层组合视图与资源配置
-- [ ] 多区域公司协同与权限继承
-- [ ] 数据质量 SLA
-- [ ] AI 成本、延迟、失败率监控
-- [ ] 灾备、限流、WAF、安全扫描
-- [ ] 数据保留、删除、导出和合规策略
-
-## 4. 当前目标技术架构
-
-短期坚持**模块化单体 + 独立 Worker**，不为了“生产级”过早微服务化。
-
-```text
-Browser
-  ↓
-Next.js Web
-  ↓
-FastAPI Application
-  ├─ Market / Opportunity / Strategy domain modules
-  ├─ Auth adapter + RBAC
-  ├─ Audit
-  └─ Job dispatcher
-       ↓
-Redis
-  ├─ Celery Broker
-  ├─ Job Result Backend
-  └─ Organization-scoped Job metadata
-       ↓
-Celery Workers
-  ├─ Public-source discovery
-  ├─ Batch scanning
-  ├─ AI extraction / re-score
-  ├─ Opportunity analysis
-  ├─ Strategy generation
-  └─ Red-team challenge
-
-PostgreSQL       Object Storage       Search / Vector
-(structured)     (source originals)   (retrieval)
-```
-
-只有当采集规模、组织规模或独立发布需求真正出现时，再拆 Collector、AI Worker、Search 等独立服务。
-
-## 5. 后台任务约束
-
-- Job 使用 Organization 元数据隔离，其他组织不能查询结果。
-- 默认启用 `task_track_started`、late ack、worker-lost reject 和有限重试。
-- Worker `prefetch_multiplier=1`，避免单个 Worker 一次预取大量慢任务。
-- 长任务设置软/硬超时；超时不得破坏已存在事实数据。
-- Job Result 默认只作为短期结果保存；长期经营事实必须进入 PostgreSQL，而不是依赖 Redis。
-- 生产环境旧同步长任务接口被阻断，必须通过 `/api/jobs/...` 提交。
-
-## 6. 数据原则
-
-### 事实、推断、建议必须分层
-
-- **Fact**：必须绑定 Source / Evidence。
-- **Inference**：必须能解释由哪些 Fact 得出，并记录模型/规则版本。
-- **Recommendation**：属于经营建议，不伪装成事实。
-
-### Unknown is valid
-
-系统允许“不知道”。不得为了让字段完整而让 AI 补造客户关系、领导态度、竞争报价、未公开融资状态、中标概率或未核实伙伴关系。
-
-### 生产评分不是中标概率
-
-Score 用于经营资源排序与风险暴露，不表达统计意义上的精确中标概率。
-
-## 7. Production Definition of Done
-
-一个功能只有满足以下条件才视为生产完成：
+一个功能只有同时满足以下条件才视为生产完成：
 
 1. 有真实数据库模型或明确无状态设计；
 2. 有权限边界；
@@ -160,18 +205,18 @@ Score 用于经营资源排序与风险暴露，不表达统计意义上的精�
 6. 不依赖 Demo 数据才能运行；
 7. AI 失败时不会破坏事实数据；
 8. 关键结果可以追溯到来源；
-9. 数据变更可以知道“谁、何时、为什么”；
+9. 数据变更可以知道谁、何时、为什么；
 10. 有可部署、可回滚、可恢复路径。
 
-## 8. 下一工程阶段
+## 10. 当前执行顺序
 
-当前优先级调整为：
+当前主线不再继续横向堆功能，按以下顺序推进：
 
-1. **真实 Source Connectors + Object Storage**
-2. **Region / Team 数据隔离 + 企业 SSO/OIDC**
-3. **Worker / API Observability + Backup**
-4. **Entity / Search / Knowledge Layer**
-5. **真实 Action / Reminder / Workflow**
-6. **Security hardening + Secrets management**
+1. **Object Storage + DocumentStore**
+2. **Scheduled Source Scan**
+3. **Candidate Opportunity Pipeline**
+4. **Entity Resolution + Search/Knowledge**
+5. **真实 Action / Reminder / Approval**
+6. **Beta 级企业治理和规模化**
 
-比赛 Demo 继续从同一产品代码构建，但只是一种运行模式，不再决定主产品架构。
+> 原则：先让智拓真正持续“看世界、记原件、识别机会”，再扩大管理功能和基础设施复杂度。
