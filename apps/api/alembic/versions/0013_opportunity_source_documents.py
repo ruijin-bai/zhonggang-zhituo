@@ -1,6 +1,6 @@
 """link formal opportunities to immutable source documents
 
-Revision ID: 0013_opportunity_source_documents
+Revision ID: 0013_opp_source_docs
 Revises: 0012_entity_evidence
 Create Date: 2026-08-24
 """
@@ -8,7 +8,7 @@ Create Date: 2026-08-24
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0013_opportunity_source_documents"
+revision = "0013_opp_source_docs"
 down_revision = "0012_entity_evidence"
 branch_labels = None
 depends_on = None
