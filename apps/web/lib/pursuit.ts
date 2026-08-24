@@ -164,14 +164,14 @@ export type Portfolio = {
 async function readJson<T>(path: string): Promise<T> {
   const response = await serverApiFetch(path, { cache: "no-store" });
   if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
+    let detail = response.statusText;
     try {
       const payload = (await response.json()) as { detail?: string };
       if (payload.detail) detail = payload.detail;
     } catch {
       // Keep HTTP status when the backend returned no JSON body.
     }
-    throw new Error(detail);
+    throw new Error(`${response.status} ${detail}`.trim());
   }
   return (await response.json()) as T;
 }
