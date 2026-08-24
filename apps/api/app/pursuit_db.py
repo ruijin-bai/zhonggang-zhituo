@@ -107,6 +107,9 @@ class PursuitWorkItemRecord(TenantScopedMixin, Base):
     priority: Mapped[str] = mapped_column(String(20), default="medium", index=True)
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     blocked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    blocked_since: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     dependency_work_item_id: Mapped[str | None] = mapped_column(
         ForeignKey("pursuit_work_items.id", ondelete="SET NULL"),
         nullable=True,
