@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.db import Base, BackgroundJobRecord, OrganizationRecord, UserRecord, set_tenant_context
-from app.job_ledger import reconcile_stuck_jobs
+from app.job_ledger import count_stale_queued_jobs, reconcile_stuck_jobs
 
 
 def test_production_metrics_require_dedicated_secret() -> None:
@@ -34,7 +34,7 @@ def test_production_metrics_require_dedicated_secret() -> None:
     assert settings.metrics_enabled is True
 
 
-def test_stuck_job_reconciler_only_fails_expired_active_jobs() -> None:
+def test_stuck_job_reconciler_does_not_auto_fail_queued_backlog() -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
     with Session(engine) as session:
@@ -49,7 +49,7 @@ def test_stuck_job_reconciler_only_fails_expired_active_jobs() -> None:
         session.commit()
         set_tenant_context(session, org.id)
 
-        stale = BackgroundJobRecord(
+        stale_running = BackgroundJobRecord(
             id=str(uuid4()),
             job_type="strategy.generate",
             task_name="zhituo.strategy.generate",
@@ -58,6 +58,17 @@ def test_stuck_job_reconciler_only_fails_expired_active_jobs() -> None:
             submitted_by_email=user.email,
             status="running",
             attempts=1,
+            updated_at=datetime.now(timezone.utc) - timedelta(seconds=600),
+        )
+        stale_queued = BackgroundJobRecord(
+            id=str(uuid4()),
+            job_type="strategy.generate",
+            task_name="zhituo.strategy.generate",
+            task_args=["opp-queued", org.id],
+            submitted_by_user_id=user.id,
+            submitted_by_email=user.email,
+            status="queued",
+            attempts=0,
             updated_at=datetime.now(timezone.utc) - timedelta(seconds=600),
         )
         recent = BackgroundJobRecord(
@@ -71,11 +82,13 @@ def test_stuck_job_reconciler_only_fails_expired_active_jobs() -> None:
             attempts=1,
             updated_at=datetime.now(timezone.utc) - timedelta(seconds=30),
         )
-        session.add_all([stale, recent])
+        session.add_all([stale_running, stale_queued, recent])
         session.commit()
 
+        assert count_stale_queued_jobs(session, threshold_seconds=300) == 1
         reconciled = reconcile_stuck_jobs(session, threshold_seconds=300)
-        assert reconciled == [stale.id]
-        assert session.get(BackgroundJobRecord, stale.id).status == "failed"
-        assert "stuck-job reconciler" in session.get(BackgroundJobRecord, stale.id).error_detail
+        assert reconciled == [stale_running.id]
+        assert session.get(BackgroundJobRecord, stale_running.id).status == "failed"
+        assert "stuck-job reconciler" in session.get(BackgroundJobRecord, stale_running.id).error_detail
+        assert session.get(BackgroundJobRecord, stale_queued.id).status == "queued"
         assert session.get(BackgroundJobRecord, recent.id).status == "running"
