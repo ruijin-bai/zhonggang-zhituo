@@ -31,11 +31,11 @@ class Settings(BaseSettings):
     idempotency_ttl_seconds: int = 86400
     job_stuck_after_seconds: int = 300
 
-    # Observability.
+    # Observability. Metrics are opt-in so an internal endpoint is never exposed accidentally.
     log_level: str = "INFO"
     request_id_header: str = "X-Request-ID"
     correlation_id_header: str = "X-Correlation-ID"
-    metrics_enabled: bool = True
+    metrics_enabled: bool = False
     metrics_token: str | None = None
 
     # HTTP/application security. The ingress must still enforce independent limits.
