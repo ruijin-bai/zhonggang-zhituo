@@ -26,6 +26,7 @@ INTELLIGENCE_TABLES = (
     "entity_aliases",
     "source_entity_mentions",
     "opportunity_entity_links",
+    "opportunity_source_documents",
 )
 
 
