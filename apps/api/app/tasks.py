@@ -67,18 +67,23 @@ def dispatch_due_source_scans_task() -> dict:
     dispatch_failures: list[dict] = []
     for organization_id in organization_ids:
         with _tenant_session(organization_id) as session:
-            subscription_ids = claim_due_subscriptions(session)
-        claimed += len(subscription_ids)
-        for subscription_id in subscription_ids:
+            claims = claim_due_subscriptions(session)
+        claimed += len(claims)
+        for subscription_id, lease_token in claims:
             try:
                 source_subscription_scan_task.apply_async(
-                    args=(subscription_id, organization_id, False),
+                    args=(subscription_id, organization_id, False, lease_token),
                     headers={"organization_id": organization_id},
                 )
                 dispatched += 1
             except Exception as exc:
                 with _tenant_session(organization_id) as session:
-                    release_dispatch_claim(session, subscription_id, str(exc))
+                    release_dispatch_claim(
+                        session,
+                        subscription_id,
+                        str(exc),
+                        lease_token=lease_token,
+                    )
                 dispatch_failures.append(
                     {"subscription_id": subscription_id, "error": str(exc)[:500]}
                 )
@@ -95,6 +100,7 @@ def source_subscription_scan_task(
     subscription_id: str,
     organization_id: str,
     manual: bool = False,
+    lease_token: str | None = None,
 ) -> dict:
     with _tenant_session(organization_id) as session:
         result = asyncio.run(
@@ -102,6 +108,7 @@ def source_subscription_scan_task(
                 session,
                 subscription_id,
                 manual=manual,
+                lease_token=lease_token,
             )
         )
         return _json(result)
