@@ -26,7 +26,7 @@ npm run dev:web
 docker compose up -d db redis
 ```
 
-PostgreSQL 保存业务事实和外部来源版本索引；Redis 用作 Celery broker、任务结果与短期 Job 元数据存储。
+PostgreSQL 保存业务事实、外部来源版本索引和来源订阅健康状态；Redis 用作 Celery broker、任务结果与短期 Job 元数据存储。
 
 ## 4. API
 
@@ -98,9 +98,9 @@ JOB_MODE=queue
 REDIS_URL=redis://<redis-host>:6379/0
 ```
 
-此时旧同步长任务接口返回 `409`，调用方必须使用 `/api/jobs/...`。
+此时旧同步长任务接口返回 `409`，调用方必须使用 `/api/jobs/...`。Beat 同时负责每分钟检查到期的 Source Subscription，但不直接执行网络抓取；每个订阅会被派发为独立 Worker Task。
 
-## 6. Source Connectors 与 DocumentStore
+## 6. Source Connectors、DocumentStore 与持续监测
 
 当前首批统一外部来源连接器：
 
@@ -151,11 +151,55 @@ DOCUMENT_STORE_S3_KMS_KEY_ID=<key-id-or-alias>
 
 凭证使用 boto3/AWS SDK 标准 credential chain，不在仓库或智拓自定义配置中保存 Access Key。
 
-### Connector / Archive 单测
+### Source Subscription
+
+持续监测使用 `source_subscriptions` 保存来源配置和健康状态，`source_scan_runs` 保存每次扫描历史。主要接口：
+
+```http
+GET  /api/sources/subscriptions
+POST /api/sources/subscriptions
+GET  /api/sources/subscriptions/{id}
+PUT  /api/sources/subscriptions/{id}
+POST /api/sources/subscriptions/{id}/pause
+POST /api/sources/subscriptions/{id}/resume
+POST /api/sources/subscriptions/{id}/scan
+GET  /api/sources/subscriptions/{id}/runs
+```
+
+创建、修改、暂停、恢复和手工扫描要求 `manager`；读取要求 `viewer`。
+
+调度参数：
+
+```bash
+SOURCE_SCAN_DISPATCH_INTERVAL_SECONDS=60
+SOURCE_SCAN_MIN_INTERVAL_SECONDS=300
+SOURCE_SCAN_LEASE_SECONDS=300
+SOURCE_SCAN_MAX_BACKOFF_SECONDS=86400
+SOURCE_SCAN_AUTO_PAUSE_FAILURES=8
+SOURCE_SCAN_DISPATCH_BATCH_SIZE=50
+```
+
+运行原则：
+
+1. Beat 只认领 `next_scan_at` 已到期、状态为 active 且当前租约已过期的订阅；
+2. 认领时写入 `lease_until + lease_token`，Worker 必须携带当前 token 才能落状态；
+3. 因队列延迟启动的旧 Worker 如果 token 已失效，只返回 `stale_claim`，不能清除新租约或覆盖新结果；
+4. Connector 自动发送 `If-None-Match / If-Modified-Since`，304 只更新健康状态，不重复下载和归档原件；
+5. 失败按指数退避，达到 `SOURCE_SCAN_AUTO_PAUSE_FAILURES` 后自动暂停，需人工检查后恢复；
+6. 手工扫描也使用相同租约围栏，避免重复提交。
+
+`SOURCE_SCAN_LEASE_SECONDS` 必须大于 Celery hard task timeout，避免正常运行中的 Worker 被调度器误判为失联。
+
+### Connector / Archive / Monitoring 单测
 
 ```bash
 cd apps/api
-uv run pytest -q tests/test_connectors.py tests/test_document_store.py tests/test_source_archive.py
+uv run pytest -q \
+  tests/test_connectors.py \
+  tests/test_conditional_source_fetch.py \
+  tests/test_document_store.py \
+  tests/test_source_archive.py \
+  tests/test_source_monitoring.py
 ```
 
 扫描 PDF 如果没有文本层会明确提示后续需要 OCR，不在同步请求中自动执行高成本 OCR。
@@ -184,7 +228,7 @@ GET /api/jobs/sources/documents?limit=100
 GET /api/jobs/{job_id}
 ```
 
-Job 元数据绑定 Organization，其他组织不能读取结果。长期任务事实写入 PostgreSQL `background_jobs`，不依赖 Redis Result 的保留周期。
+Job 元数据绑定 Organization，其他组织不能读取结果。长期任务事实写入 PostgreSQL `background_jobs`，不依赖 Redis Result 的保留周期。Source Subscription 扫描本身则以 `source_scan_runs` 作为长期任务事实与健康历史，不依赖 Celery Result 保留周期。
 
 ## 8. 身份与权限
 
@@ -206,10 +250,10 @@ X-Zhituo-User: admin@zhituo.local
 
 - `viewer`：只读；
 - `analyst`：扫描、分析、跟踪、提交 AI / Source Job；
-- `manager`：确认商机入池、修改经营策略；
+- `manager`：确认商机入池、修改经营策略、管理持续来源订阅；
 - `admin`：管理能力。
 
-关键写操作与 Job 提交进入 Audit Log。
+关键写操作与 Job/Source Subscription 操作进入 Audit Log。
 
 ## 9. AI 模型
 
@@ -267,6 +311,11 @@ DATABASE_URL=postgresql+psycopg://...
 REDIS_URL=redis://...
 DOCUMENT_STORE_BACKEND=s3
 DOCUMENT_STORE_S3_BUCKET=...
+SOURCE_SCAN_DISPATCH_INTERVAL_SECONDS=60
+SOURCE_SCAN_MIN_INTERVAL_SECONDS=300
+SOURCE_SCAN_LEASE_SECONDS=300
+SOURCE_SCAN_MAX_BACKOFF_SECONDS=86400
+SOURCE_SCAN_AUTO_PAUSE_FAILURES=8
 ```
 
 生产环境禁止静默 Demo fallback、禁止同步执行网页抓取和 AI 长任务、禁止使用本地文件系统保存正式来源原件。
@@ -303,7 +352,9 @@ docker build -f apps/web/Dockerfile -t zhituo-web:local .
 - 新发现项目先进入 Draft；
 - 关键事实绑定 Source / Evidence；
 - 原始外部文档按内容哈希不可变归档；
-- PostgreSQL 保存版本、租户关系和业务事实，不保存大块原件；
+- PostgreSQL 保存版本、订阅健康、租户关系和业务事实，不保存大块原件；
+- 周期抓取使用 HTTP 条件请求，304 不重复制造版本；
+- 调度租约使用 fencing token，过期 Worker 不得覆盖新 Worker；
 - 分数由规则引擎计算，AI 不直接覆盖总分；
 - AI 输出采用结构化 Schema；
 - ScoreSnapshot / Event / AuditLog 保留变化历史；
