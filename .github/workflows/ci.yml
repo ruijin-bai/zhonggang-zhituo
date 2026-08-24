@@ -173,15 +173,13 @@ jobs:
         with:
           node-version: 22
       - name: Resolve, lock and audit Web production dependencies
-        working-directory: apps/web
         run: |
           npm install --package-lock=true
           test -s package-lock.json
           npm audit --omit=dev --audit-level=high
       - name: Generate Web CycloneDX SBOM
-        working-directory: apps/web
-        run: npm sbom --sbom-format cyclonedx > ../../web-sbom.cdx.json
-      - name: Upload software bills of materials and generated Web lockfile
+        run: npm sbom --workspace apps/web --sbom-format cyclonedx > web-sbom.cdx.json
+      - name: Upload software bills of materials and generated monorepo lockfile
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -189,7 +187,7 @@ jobs:
           path: |
             api-sbom.cdx.json
             web-sbom.cdx.json
-            apps/web/package-lock.json
+            package-lock.json
           if-no-files-found: warn
           retention-days: 30
 
