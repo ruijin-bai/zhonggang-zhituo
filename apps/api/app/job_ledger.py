@@ -1,18 +1,27 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .config import get_settings
 from .db import BackgroundJobRecord, SessionLocal, set_tenant_context
+from .metrics import observe_job_transition, observe_stuck_reconciled
 from .security import Principal
 
 logger = logging.getLogger("zhituo.jobs")
 TERMINAL_JOB_STATES = {"succeeded", "failed"}
+ACTIVE_JOB_STATES = {"queued", "running", "retrying"}
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def create_job_record(
@@ -46,6 +55,7 @@ def create_job_record(
     session.add(record)
     session.commit()
     session.refresh(record)
+    observe_job_transition(job_type, "queued")
     return record
 
 
@@ -71,12 +81,13 @@ def transition_job_record(
         record.started_at = now
     if status in TERMINAL_JOB_STATES:
         record.finished_at = now
-    elif status in {"queued", "retrying", "running"}:
+    elif status in ACTIVE_JOB_STATES:
         record.finished_at = None
     record.error_detail = error_detail[:4000] if error_detail else None
     record.updated_at = now
     session.commit()
     session.refresh(record)
+    observe_job_transition(record.job_type, status, increment_attempt=increment_attempt)
     return record
 
 
@@ -117,6 +128,63 @@ def list_failed_job_records(session: Session, *, limit: int = 100) -> list[Backg
         .order_by(BackgroundJobRecord.finished_at.desc(), BackgroundJobRecord.submitted_at.desc())
         .limit(limit)
     ).all()
+
+
+def list_stuck_job_records(
+    session: Session,
+    *,
+    threshold_seconds: int | None = None,
+    limit: int = 500,
+) -> list[BackgroundJobRecord]:
+    threshold = threshold_seconds or get_settings().job_stuck_after_seconds
+    cutoff = _now() - timedelta(seconds=threshold)
+    return session.scalars(
+        select(BackgroundJobRecord)
+        .where(
+            BackgroundJobRecord.status.in_(ACTIVE_JOB_STATES),
+            BackgroundJobRecord.updated_at < cutoff,
+        )
+        .order_by(BackgroundJobRecord.updated_at.asc())
+        .limit(limit)
+    ).all()
+
+
+def reconcile_stuck_jobs(
+    session: Session,
+    *,
+    threshold_seconds: int | None = None,
+) -> list[str]:
+    now = _now()
+    threshold = threshold_seconds or get_settings().job_stuck_after_seconds
+    reconciled: list[str] = []
+    for record in list_stuck_job_records(
+        session,
+        threshold_seconds=threshold,
+    ):
+        last_seen = _as_utc(record.updated_at)
+        age_seconds = max(0, int((now - last_seen).total_seconds()))
+        record.status = "failed"
+        record.finished_at = now
+        record.updated_at = now
+        record.error_detail = (
+            f"stuck-job reconciler marked task failed after {age_seconds}s without state update; "
+            f"threshold={threshold}s"
+        )
+        reconciled.append(record.id)
+        observe_job_transition(record.job_type, "failed")
+        observe_stuck_reconciled(record.job_type)
+        logger.warning(
+            "background job reconciled as stuck",
+            extra={
+                "event": "job.stuck.reconciled",
+                "job_id": record.id,
+                "job_type": record.job_type,
+                "organization_id": record.organization_id,
+            },
+        )
+    if reconciled:
+        session.commit()
+    return reconciled
 
 
 def record_to_dict(record: BackgroundJobRecord) -> dict:
