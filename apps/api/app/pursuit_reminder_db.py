@@ -50,7 +50,11 @@ class PursuitReminderRecord(TenantScopedMixin, Base):
         DateTime(timezone=True), nullable=True, index=True
     )
     escalation_level: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=1)
     first_triggered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True
+    )
+    last_triggered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, index=True
     )
     last_evaluated_at: Mapped[datetime] = mapped_column(
