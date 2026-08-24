@@ -42,7 +42,10 @@ WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'backup_role')
 GRANT CONNECT ON DATABASE :"database_name" TO :"runtime_role", :"backup_role";
 GRANT USAGE ON SCHEMA public TO :"runtime_role", :"backup_role";
 
-GRANT SELECT ON TABLE organizations, users, memberships TO :"runtime_role";
+GRANT SELECT ON TABLE organizations TO :"runtime_role";
+-- Enterprise directory sync is the only application path that provisions identities. The
+-- runtime role may create/update users and memberships but cannot delete them or organizations.
+GRANT SELECT, INSERT, UPDATE ON TABLE users, memberships TO :"runtime_role";
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     opportunities,
@@ -63,6 +66,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     pursuit_decision_records,
     pursuit_reminders,
     pursuit_reminder_deliveries,
+    directory_sources,
+    directory_role_rules,
+    directory_identity_links,
+    directory_sync_runs,
     idempotency_records,
     background_jobs,
     source_fetches,
