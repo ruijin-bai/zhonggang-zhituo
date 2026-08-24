@@ -1,0 +1,252 @@
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+.searchPanel,
+.sidePanel,
+.knowledgeSection {
+  border: 1px solid #d9dee7;
+  border-radius: 10px;
+  background: #fff;
+  padding: 20px;
+}
+
+.searchForm {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(120px, 0.35fr)) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #596273;
+}
+
+.field input,
+.field select {
+  min-height: 40px;
+  border: 1px solid #cdd3dd;
+  border-radius: 7px;
+  background: #fff;
+  padding: 0 11px;
+  color: #162033;
+}
+
+.searchButton {
+  min-height: 40px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 18px;
+  background: #153b68;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.resultList,
+.candidateList,
+.entityList,
+.sourceList,
+.evidenceList,
+.relatedList {
+  display: grid;
+  gap: 10px;
+}
+
+.resultCard,
+.candidateCard,
+.entityCard,
+.sourceCard,
+.evidenceCard,
+.relatedCard {
+  border: 1px solid #e0e4ea;
+  border-radius: 8px;
+  padding: 14px 15px;
+  background: #fff;
+}
+
+.resultTop,
+.cardTop,
+.metricRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.resultTitle {
+  color: #152a44;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.resultTitle:hover {
+  text-decoration: underline;
+}
+
+.typeBadge,
+.rankBadge,
+.roleBadge,
+.fieldBadge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #cfd6df;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #4a5668;
+  background: #fafbfc;
+}
+
+.scoreBadge {
+  min-width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: #153b68;
+}
+
+.meta,
+.snippet,
+.note {
+  color: #697386;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.snippet {
+  margin-top: 8px;
+  color: #3e4755;
+}
+
+.matched {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.sideTitle,
+.sectionTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.sideTitle h2,
+.sectionTitle h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.candidateCard strong {
+  color: #1a2e49;
+}
+
+.candidateMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.metric {
+  border-left: 2px solid #d6dce5;
+  padding-left: 8px;
+}
+
+.empty {
+  border: 1px dashed #ccd3dc;
+  border-radius: 8px;
+  padding: 28px 18px;
+  text-align: center;
+  color: #747d8b;
+}
+
+.heroMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.heroMetric {
+  border: 1px solid #d9dee7;
+  border-radius: 8px;
+  padding: 13px 14px;
+  background: #fff;
+}
+
+.heroMetric span {
+  display: block;
+  color: #717b8a;
+  font-size: 11px;
+}
+
+.heroMetric strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 22px;
+  color: #182f4d;
+}
+
+.knowledgeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+.entityHeader {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.evidenceQuote {
+  margin-top: 8px;
+  color: #293547;
+  line-height: 1.75;
+}
+
+.sourceUrl {
+  word-break: break-all;
+}
+
+@media (max-width: 1120px) {
+  .workbench {
+    grid-template-columns: 1fr;
+  }
+  .searchForm {
+    grid-template-columns: 1fr 1fr;
+  }
+  .heroMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .searchForm,
+  .knowledgeGrid,
+  .heroMetrics {
+    grid-template-columns: 1fr;
+  }
+  .fullWidth {
+    grid-column: auto;
+  }
+}
