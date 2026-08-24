@@ -146,24 +146,45 @@ def reject_candidate(
     db: Session = Depends(get_db),
     principal: Principal = Depends(require_role("manager")),
 ) -> dict:
-    row = db.get(OpportunityDraftRecord, draft_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="candidate opportunity not found")
-    if row.status != "pending":
-        raise HTTPException(status_code=409, detail="candidate opportunity has already been reviewed")
-    row.status = "rejected"
-    row.updated_at = utc_now()
-    write_audit(
+    handle = begin_operation(
         db,
-        principal=principal,
-        action="candidate.reject",
-        resource_type="draft",
-        resource_id=row.id,
-        request=request,
-        details={"source_title": row.source_title},
+        organization_id=principal.organization_id,
+        scope=f"candidate.reject:{draft_id}",
+        raw_key=request.headers.get("Idempotency-Key"),
+        request_payload={"draft_id": draft_id},
     )
-    db.commit()
-    return {"id": row.id, "status": row.status}
+    if handle.is_replay:
+        return handle.replay_payload
+
+    try:
+        row = db.get(OpportunityDraftRecord, draft_id)
+        if row is None:
+            fail_operation(db, handle, "candidate opportunity not found")
+            raise HTTPException(status_code=404, detail="candidate opportunity not found")
+        if row.status != "pending":
+            fail_operation(db, handle, "candidate opportunity has already been reviewed")
+            raise HTTPException(status_code=409, detail="candidate opportunity has already been reviewed")
+
+        row.status = "rejected"
+        row.updated_at = utc_now()
+        write_audit(
+            db,
+            principal=principal,
+            action="candidate.reject",
+            resource_type="draft",
+            resource_id=row.id,
+            request=request,
+            details={"source_title": row.source_title},
+        )
+        db.commit()
+        result = {"id": row.id, "status": row.status}
+        complete_operation(db, handle, result)
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        fail_operation(db, handle, type(exc).__name__)
+        raise
 
 
 @router.post("/processing/{processing_id}/retry")

@@ -34,6 +34,9 @@ function destination(item: SearchResultItem): string | null {
   if (item.opportunity_id) {
     return `/knowledge/opportunities/${encodeURIComponent(item.opportunity_id)}`;
   }
+  if (item.resource_type === "candidate") {
+    return `/knowledge/candidates/${encodeURIComponent(item.resource_id)}`;
+  }
   if (item.resource_type === "entity") {
     return `/knowledge?q=${encodeURIComponent(item.title)}&types=entity`;
   }
@@ -82,7 +85,9 @@ function CandidateCard({ item }: { item: CandidateItem }) {
     <article className={styles.candidateCard}>
       <div className={styles.cardTop}>
         <div>
-          <strong>{item.discovery.title}</strong>
+          <Link className={styles.resultTitle} href={`/knowledge/candidates/${encodeURIComponent(item.id)}`}>
+            {item.discovery.title}
+          </Link>
           <div className={styles.meta}>{item.discovery.country} · {item.discovery.sector} · {item.discovery.stage}</div>
         </div>
         <span className={styles.typeBadge}>{Math.round(item.discovery.confidence * 100)}%</span>

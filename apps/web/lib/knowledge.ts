@@ -34,17 +34,35 @@ export type CandidateItem = {
   id: string;
   status: string;
   discovery: {
+    project_detected: boolean;
     title: string;
     country: string;
     region: string;
     sector: string;
     stage: string;
     owner: string;
+    estimated_value_usd_m: number | null;
     summary: string;
     confidence: number;
+    facts: Array<{
+      field_name: string;
+      value: string;
+      score_hint: number | null;
+      evidence_quote: string;
+      confidence: number;
+    }>;
+    parties: Array<{
+      role: string;
+      name: string;
+      country: string | null;
+      evidence_quote: string;
+      confidence: number;
+    }>;
   };
+  source_url: string | null;
   source_title: string;
   publisher: string;
+  published_at: string;
   source_rank: string;
   duplicate_matches: Array<{
     opportunity_id: string;
@@ -52,6 +70,8 @@ export type CandidateItem = {
     country: string;
     similarity: number;
   }>;
+  source_document_id: string | null;
+  processing_id: string | null;
   source_count: number;
   source_document_ids: string[];
   entities: Array<{
@@ -61,6 +81,7 @@ export type CandidateItem = {
     roles: string[];
     source_count: number;
   }>;
+  created_at: string;
   updated_at: string;
 };
 
@@ -170,6 +191,10 @@ export async function getKnowledgeSearch(input: {
 
 export async function getPendingCandidates(limit = 20): Promise<CandidateItem[]> {
   return readJson<CandidateItem[]>(`/api/candidates?status=pending&limit=${limit}`);
+}
+
+export async function getCandidate(candidateId: string): Promise<CandidateItem> {
+  return readJson<CandidateItem>(`/api/candidates/${encodeURIComponent(candidateId)}`);
 }
 
 export async function getOpportunityKnowledge(opportunityId: string): Promise<OpportunityKnowledge> {

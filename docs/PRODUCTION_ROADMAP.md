@@ -138,11 +138,21 @@
 - [x] Opportunity 360° Web
 - [x] Opportunity ↔ Knowledge View 连续导航
 - [x] 新北极星导航与产品文案
-- [ ] Web CI / production image 验证并合入 main
-- [ ] Candidate confirm / reject 受控 UI
-- [ ] attach additional evidence UI
+- [x] Web CI / production image 验证并合入 main
+- [x] Candidate confirm / reject 受控 UI（本分支实现，待 CI 合并）
+- [x] attach additional evidence UI（本分支实现，待 CI 合并）
 - [ ] Entity 专属浏览页
 - [ ] 首页“今天发生什么 / 我需要处理什么”摘要
+
+Candidate 审核设计原则：
+
+- viewer / analyst 可查看，不可审核；
+- manager / admin 才显示并允许审核动作；
+- 后端 RBAC 始终为最终权限边界；
+- confirm / reject / attach 全部使用业务幂等；
+- 审核动作写入 Audit Log；
+- confirm 入正式机会池前重新从 DocumentStore 读取并校验规范原文；
+- 疑似已有 Opportunity 只允许经营人员人工选择“作为补充证据挂接”，机器不擅自合并正式项目。
 
 Stage A 完成标准：
 

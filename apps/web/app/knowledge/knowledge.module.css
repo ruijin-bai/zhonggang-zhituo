@@ -30,13 +30,24 @@
 }
 
 .field input,
-.field select {
-  min-height: 40px;
+.field select,
+.field textarea {
   border: 1px solid #cdd3dd;
   border-radius: 7px;
   background: #fff;
-  padding: 0 11px;
+  padding: 10px 11px;
   color: #162033;
+  font: inherit;
+}
+
+.field input,
+.field select {
+  min-height: 40px;
+}
+
+.field textarea {
+  resize: vertical;
+  line-height: 1.65;
 }
 
 .searchButton {
@@ -48,6 +59,12 @@
   color: #fff;
   font-weight: 700;
   cursor: pointer;
+}
+
+.searchButton:disabled,
+.fieldBadge:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .resultList,
