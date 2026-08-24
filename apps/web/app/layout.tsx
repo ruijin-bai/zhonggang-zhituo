@@ -24,7 +24,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <Link href="/knowledge">经营情报</Link>
               <Link href="/intelligence">情报重评</Link>
               <Link href="/opportunities">机会池</Link>
-              <Link href="/tracking">重点跟踪</Link>
+              <Link href="/pursuit">经营协同</Link>
+              <Link href="/tracking">重点跟踪 · Legacy</Link>
               <Link href="/strategy">赢标策略</Link>
               <Link href="/battlecard">经营作战卡</Link>
             </nav>
