@@ -84,6 +84,8 @@ jobs:
           pip install 'uv>=0.8,<1'
       - name: Install locked API dependencies
         run: uv sync --locked --extra dev
+      - name: Lint Python with Ruff
+        run: uv run ruff check app tests
       - name: Compile Python sources
         run: uv run python -m compileall -q app
       - name: Validate operations shell scripts
