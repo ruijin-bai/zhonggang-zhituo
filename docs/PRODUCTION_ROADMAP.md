@@ -1,222 +1,253 @@
 # 中港智拓 Production Roadmap
 
-> 产品目标：面向海外工程企业的 AI 市场情报与经营决策平台。
+> 北极星：**海外工程经营操作系统的一层智能中枢**。
+>
+> 详细产品边界、五大引擎和最终成功定义见 `docs/INTELLIGENCE_HUB_MASTER_PLAN.md`。本文件只保留当前生产阶段、完成项和近期执行顺序。
 
-智拓不再以比赛 Demo 作为最终架构约束。比赛展示保留为独立 Demo Mode；主线按真实数据、持续运行、多人协同和企业治理推进。
+## 1. 当前阶段：Production Alpha 中后段
 
-## 1. 核心经营闭环
+当前主线已经完成从“比赛原型”向真实企业系统架构的转变。后续优先级不再由 Demo 功能决定，而由真实经营团队是否能持续使用决定。
 
-**持续感知全球市场 → 自动发现项目机会 → 建立证据链 → 评估经营价值 → 形成经营策略 → 驱动跟踪行动 → 沉淀企业市场资产**
-
-产品围绕三个管理问题组织：
-
-1. **去哪里（Where to Play）**：国别、区域、行业、资金来源与市场活跃度。
-2. **追什么（What to Pursue）**：项目成熟度、融资、客户、竞争、能力匹配、风险和证据置信度。
-3. **怎么拿（How to Win）**：客户诉求、竞争策略、伙伴策略、赢标主张、红队挑战、责任人与行动计划。
-
-## 2. 当前阶段：Production Alpha
-
-### Foundation — 已完成
-
-- [x] Next.js Web + FastAPI API
-- [x] PostgreSQL + Alembic
-- [x] Redis + Celery Worker + Beat
-- [x] Opportunity / Source / Evidence / ScoreSnapshot / Event
-- [x] 市场雷达、商机发现、人工确认、动态重评
-- [x] Strategy / Tracking / Battlecard 基础经营链
-- [x] Demo / Development / Production 配置隔离
-- [x] User / Organization / RBAC
-- [x] trusted proxy + OIDC JWT 身份适配
-- [x] SQLAlchemy Tenant Scope + PostgreSQL RLS
-- [x] runtime / migration / backup 数据库角色拆分
-- [x] Queue Idempotency + 关键同步写操作幂等
-- [x] Strategy optimistic concurrency
-- [x] Durable Background Job Ledger + retry lineage
-- [x] Stuck Job Reconciler
-- [x] JSON 日志、Request ID、Correlation ID
-- [x] Prometheus metrics、首版 SLO 和告警规则
-- [x] PostgreSQL backup / restore drill
-- [x] Web/API production image + production Compose
-- [x] Python/Web dependency audit + CycloneDX SBOM
-- [x] npm workspace lock + Python uv lock
-- [x] `zhituo/ci-gate` 自动质量门禁
-
-Foundation 完成后，除明确的高风险缺陷外，不再优先投入“为了更像大系统”的基础设施建设。工程资源转向真实数据、知识资产和经营闭环。
-
-## 3. Alpha-1 — 外部市场感知与原件资产化
-
-### A. Source Connector Foundation — 当前实现
-
-- [x] 统一 `SourceDocument` 契约
-- [x] Connector Registry
-- [x] HTML / Text Connector
-- [x] RSS / Atom Connector
-- [x] PDF Connector
-- [x] 流式下载与字节上限
-- [x] 公开 URL / redirect SSRF 边界复用
-- [x] 内容 SHA-256 / 原件 SHA-256
-- [x] 首批 Connector 单元测试
-- [ ] OCR Connector / OCR Worker
-- [ ] 采购平台/API 专用 Connector
-
-### B. Object Storage — 下一大步
-
-- [ ] `DocumentStore` 抽象
-- [ ] 本地开发实现
-- [ ] S3-compatible 生产实现
-- [ ] 以 `raw_sha256` 进行内容寻址
-- [ ] 原始 HTML / PDF / XML / JSON 持久化
-- [ ] MIME / size / fetched_at / ETag / Last-Modified 元数据
-- [ ] 相同原件不重复写入
-- [ ] PostgreSQL 仅保存对象引用和结构化索引
-
-### C. Scheduled Source Scan
-
-- [ ] Source Feed / Connector Configuration 模型
-- [ ] 调度周期、启停、抓取状态
-- [ ] ETag / If-Modified-Since 增量抓取
-- [ ] 单源失败隔离与重试
-- [ ] 抓取成功率、延迟和新文档量指标
-- [ ] 管理员 Source Health 视图
-
-## 4. Alpha-2 — Candidate Opportunity Pipeline
-
-目标：让系统从“读文档”升级为“持续产生可审核的候选商机”。
+核心闭环：
 
 ```text
-Source Scan
-  ↓
-SourceDocument
-  ↓
-Object Storage / Hash Dedup
-  ↓
-Project Detection
-  ↓
-Entity Resolution
-  ↓
-Candidate Opportunity
-  ↓
-AI 初筛 + Evidence
-  ↓
-人工确认
-  ↓
-正式 Opportunity
+感知市场
+→ 识别商机
+→ 汇聚证据与实体
+→ 机会研判
+→ 形成策略
+→ 编排行动
+→ 记录结果
+→ 复盘学习
 ```
 
-### P0
+## 2. 已完成的生产底座
 
-- [ ] canonical URL + hash 双重去重
-- [ ] 同一项目跨来源聚合
-- [ ] Candidate Opportunity 独立状态模型
-- [ ] 来源增量触发项目重评
-- [ ] Candidate → Confirmed 审计链
-- [ ] 重复项目合并/关联操作
-- [ ] “为什么识别成商机”证据解释
+### 工程与治理
 
-## 5. Alpha-3 — Entity / Search / Knowledge Layer
+- [x] Next.js Web + BFF
+- [x] FastAPI API
+- [x] PostgreSQL + Alembic
+- [x] Redis + Celery Worker + Beat
+- [x] Web / API production images
+- [x] Production Compose
+- [x] npm workspace lock + Python uv lock
+- [x] Python/Web dependency audit + CycloneDX SBOM
+- [x] `zhituo/ci-gate`
+- [x] PostgreSQL backup / restore drill
+- [x] JSON logging / Request ID / Correlation ID
+- [x] Prometheus metrics / SLO / alert rules
 
-### 实体化
+### 身份、安全与一致性
 
-- [ ] Client / Owner
-- [ ] Financier
-- [ ] Competitor
-- [ ] Partner
-- [ ] Country / Region
-- [ ] Project / Opportunity
+- [x] User / Organization / Membership / RBAC
+- [x] trusted proxy + OIDC JWT
+- [x] SQLAlchemy Tenant Scope
+- [x] PostgreSQL RLS
+- [x] runtime / migration / backup DB roles
+- [x] Idempotency-Key
+- [x] business-write idempotency
+- [x] Strategy optimistic concurrency
+- [x] Durable Background Job Ledger
+- [x] retry lineage / stuck-job reconciliation
+- [x] tenant-switch identity-map cache hardening
 
-### Entity Resolution
+## 3. 已完成的市场感知与商机链
 
-- [ ] Alias
-- [ ] 名称规范化
-- [ ] 同一机构跨来源合并
-- [ ] 人工纠错和合并历史
+### Source / Document
+
+- [x] Connector contract / registry
+- [x] HTML / Text
+- [x] RSS / Atom
+- [x] PDF text extraction
+- [x] streaming download / size limits / SSRF boundary
+- [x] Local + S3-compatible `DocumentStore`
+- [x] raw/text SHA-256 content addressing
+- [x] immutable raw object archival
+- [x] SourceFetch / SourceDocument versioning and dedup
+
+### Scheduled Market Sensing
+
+- [x] SourceSubscription / SourceScanRun
+- [x] ETag / Last-Modified / 304 conditional fetch
+- [x] Beat dispatcher + Worker scan
+- [x] lease + fencing token
+- [x] exponential backoff / auto-pause / manual resume
+- [x] source health history
+
+### Candidate Opportunity
+
+- [x] durable CandidateProcessing ledger
+- [x] SourceDocument → Project Detection
+- [x] no-project separation
+- [x] Candidate Inbox
+- [x] high-threshold candidate dedup
+- [x] formal Opportunity duplicate warning only
+- [x] Candidate → human confirmation → Opportunity
+- [x] original text restored from DocumentStore before formal evidence creation
+- [x] multi-source Candidate aggregation
+- [x] immutable OpportunitySourceDocument provenance
+- [x] manager-controlled “attach as evidence” path
+
+## 4. 已完成的经营知识层
+
+### Evidence / Entity
+
+- [x] Source / Evidence / Confidence
+- [x] SourceDocumentInsight
+- [x] Entity / Alias
+- [x] Owner / Financier / Competitor / Partner roles
+- [x] conservative entity normalization
+- [x] same-name cross-country separation
+- [x] human alias management with ambiguity rejection
+- [x] Opportunity entity relations
+- [x] multi-source entity evidence aggregation
 
 ### Search / Knowledge
 
-- [ ] 全局检索
-- [ ] 项目时间线
-- [ ] 国别知识页
-- [ ] 客户画像与历史项目
-- [ ] 竞争对手画像
-- [ ] Evidence 可回到原始文档位置
-- [ ] 历史经营策略与结果可复盘
+- [x] unified structured search
+- [x] Opportunity / Candidate / Entity / Evidence / Source search
+- [x] deterministic relevance + matched fields
+- [x] country / sector / role / source-rank filters
+- [x] Opportunity 360° Knowledge API
+- [x] related opportunities by shared resolved entities
+- [x] source/evidence provenance
+- [x] tenant-safe search through existing RLS-backed facts
 
-短期继续使用 PostgreSQL；只有实体关系规模和查询模式证明需要时，再引入专门图数据库或向量检索服务。
+## 5. 已有但尚未升级为“操作系统级”的能力
 
-## 6. Alpha-4 — 真实经营协同
+- [x] Opportunity scoring / confidence
+- [x] dynamic re-evaluation
+- [x] Pursuit Thesis
+- [x] Strategy workspace
+- [x] red-team challenge
+- [x] WatchItem / Action / Alert 基础对象
+- [x] Battlecard
 
-- [ ] Action 绑定真实负责人账号
-- [ ] Deadline / Status / Reminder
-- [ ] Alert routing
-- [ ] Go / No-Go 审批与留痕
-- [ ] 管理层 Portfolio / Resource Allocation
-- [ ] Audit 查询与导出 UI
-- [ ] Failed / Dead Letter Job 管理 UI
-- [ ] Organization / Team / Member 管理 UI
-- [ ] 邮件 / OA / 企业协同通知接口
+这些对象目前能够演示经营闭环，但还没有完成真实团队协同所需的用户、审批、依赖、提醒、升级和 Portfolio 语义。
 
-## 7. Beta — 企业治理与规模化
+## 6. 当前主线：Stage A — 经营工作台产品化
 
-- [ ] Region / Team 细粒度权限继承
+目标：把已经成熟的后端能力变成真实市场人员每天可以使用的入口。
+
+当前执行：
+
+- [x] 统一经营情报 Web 工作台骨架
+- [x] Candidate Inbox 只读入口
+- [x] 全局 Search Web
+- [x] Opportunity 360° Web
+- [x] Opportunity ↔ Knowledge View 连续导航
+- [x] 新北极星导航与产品文案
+- [ ] Web CI / production image 验证并合入 main
+- [ ] Candidate confirm / reject 受控 UI
+- [ ] attach additional evidence UI
+- [ ] Entity 专属浏览页
+- [ ] 首页“今天发生什么 / 我需要处理什么”摘要
+
+Stage A 完成标准：
+
+1. 核心情报查询路径不超过 3 次点击；
+2. 真实 API 数据，无生产 Demo fallback；
+3. 搜索结果可追溯到 Opportunity / Evidence / Source；
+4. Candidate 审核动作受 RBAC、幂等和审计保护；
+5. Web check / build / production image / full ci-gate 全绿。
+
+## 7. 下一主战场：Stage B — Pursuit Orchestration
+
+目标：从“告诉经营人员应该做什么”升级为“推动组织把事情做完”。
+
+### P0 数据模型
+
+- [ ] Pursuit Workspace
+- [ ] Action 绑定真实 User / Membership
+- [ ] Collaborator / Watcher
+- [ ] Deadline / Priority / Status
+- [ ] Dependency / Blocker
+- [ ] Decision Gate
+- [ ] Go / Hold / No-Go Decision Record
+- [ ] Review / Approval lineage
+
+### P0 工作流
+
+- [ ] My Work
+- [ ] Team Work
+- [ ] overdue / blocked views
+- [ ] Reminder
+- [ ] Escalation
+- [ ] Portfolio
+- [ ] management resource/risk view
+
+Stage B 完成标准：
+
+> 一个 Opportunity 从正式确认入池到决策、行动、复核和退出/继续投入，全部能够回答“谁、何时、做了什么、依据什么、结果如何”。
+
+## 8. Stage C — 企业连接与真实数据
+
+按最小业务价值优先连接，不以连接器数量为目标：
+
+1. [ ] 企业身份目录深化；
+2. [ ] 邮件 / Teams / 企业微信 / OA 通知之一；
+3. [ ] CRM / 市场项目主数据；
+4. [ ] 历史投标 / 中标 / 失标数据；
+5. [ ] 企业知识库；
+6. [ ] OCR / 高价值采购平台/API Connector。
+
+原则：外部系统继续作为其权威事实源，智拓只保存智能上下文、映射、审计和必要快照。
+
+## 9. Stage D — Outcome / Learning Loop
+
+- [ ] Opportunity Outcome
+- [ ] Bid / No-Bid
+- [ ] Win / Loss
+- [ ] cancellation / postponement
+- [ ] Win-Loss Review
+- [ ] historical hypothesis validation
+- [ ] action effectiveness
+- [ ] score calibration dataset
+- [ ] source quality calibration
+- [ ] prompt/model/rule evaluation dataset
+
+目标：让企业历史经营结果反向改善下一次机会判断，而不是长期依赖静态经验规则。
+
+## 10. Stage E — Beta 企业治理
+
+- [ ] Secret Manager / KMS
 - [ ] Prompt / Schema / Model Version Governance
-- [ ] AI 成本、延迟、失败率治理
-- [ ] 数据质量 SLA
-- [ ] 数据保留、删除、导出和合规策略
-- [ ] Secret Manager / KMS 与自动轮换
-- [ ] Container CVE scan / image signing / provenance
-- [ ] Expand-Migrate-Contract 数据库迁移规范
-- [ ] Canary / rolling deploy / rollback gate
-- [ ] PostgreSQL / Redis 高可用
-- [ ] 跨区域灾备（有明确业务需求后）
+- [ ] AI cost / latency / failure governance
+- [ ] Data Quality SLA
+- [ ] retention / export / delete policies
+- [ ] container CVE scan / image signing / provenance
+- [ ] Expand-Migrate-Contract
+- [ ] Canary / rolling / rollback gate
+- [ ] PostgreSQL / Redis HA（业务证明需要后）
 
-## 8. 环境原则
+## 11. 暂缓事项
 
-### Demo / Development
+在 Stage B 完成前，不把以下内容作为主线优先级：
 
-允许：
+- 通用 Chat/RAG 壳；
+- 大规模 Vector DB；
+- 通用知识图谱；
+- 多 Agent 编排展示；
+- 精确中标概率；
+- 为比赛单独增加一级模块；
+- 过早微服务化；
+- 重造 CRM / OA / ERP。
 
-- `DEMO_MODE=true`
-- `ALLOW_DEMO_FALLBACK=true`
-- `DATA_BACKEND=auto`
-- `JOB_MODE=inline` 或 `queue`
+## 12. Production Definition of Done
 
-### Production
+功能只有同时满足以下条件才算完成：
 
-必须：
-
-- `APP_ENV=production`
-- `DEMO_MODE=false`
-- `ALLOW_DEMO_FALLBACK=false`
-- `DATA_BACKEND=database`
-- `JOB_MODE=queue`
-- `DATABASE_RLS_ENABLED=true`
-
-生产故障必须显式失败并进入监控，不得静默展示 Demo 数据。
-
-## 9. Production Definition of Done
-
-一个功能只有同时满足以下条件才视为生产完成：
-
-1. 有真实数据库模型或明确无状态设计；
+1. 有真实数据模型或明确无状态设计；
 2. 有权限边界；
 3. 有输入校验和失败路径；
-4. 有日志/审计；
+4. 有审计/日志；
 5. 有自动化测试；
-6. 不依赖 Demo 数据才能运行；
-7. AI 失败时不会破坏事实数据；
-8. 关键结果可以追溯到来源；
-9. 数据变更可以知道谁、何时、为什么；
-10. 有可部署、可回滚、可恢复路径。
+6. 不依赖 Demo 数据；
+7. AI 失败不能破坏事实；
+8. 关键结论可追溯；
+9. 关键写入可说明谁、何时、为什么；
+10. 有部署、回滚和恢复路径；
+11. 最终 `zhituo/ci-gate` 全绿。
 
-## 10. 当前执行顺序
-
-当前主线不再继续横向堆功能，按以下顺序推进：
-
-1. **Object Storage + DocumentStore**
-2. **Scheduled Source Scan**
-3. **Candidate Opportunity Pipeline**
-4. **Entity Resolution + Search/Knowledge**
-5. **真实 Action / Reminder / Approval**
-6. **Beta 级企业治理和规模化**
-
-> 原则：先让智拓真正持续“看世界、记原件、识别机会”，再扩大管理功能和基础设施复杂度。
+当前详细路线以 `INTELLIGENCE_HUB_MASTER_PLAN.md` 为最高优先级产品计划。
