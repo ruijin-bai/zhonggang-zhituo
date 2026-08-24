@@ -10,13 +10,18 @@ function formatDate(value: string): string {
 
 function attentionHref(item: DailyBrief["attention"][number]): string {
   if (item.kind === "candidate_review") return `/knowledge/candidates/${encodeURIComponent(item.resource_id)}`;
+  if (item.opportunity_id && ["pursuit_reminder", "overdue_work_item"].includes(item.kind)) {
+    return `/pursuit/opportunities/${encodeURIComponent(item.opportunity_id)}`;
+  }
   if (item.opportunity_id) return `/knowledge/opportunities/${encodeURIComponent(item.opportunity_id)}`;
-  return "/tracking";
+  return "/pursuit";
 }
 
 function attentionLabel(kind: DailyBrief["attention"][number]["kind"]): string {
   return {
-    overdue_action: "逾期行动",
+    pursuit_reminder: "执行升级",
+    overdue_work_item: "逾期工作",
+    overdue_action: "逾期行动 · Legacy",
     open_alert: "经营预警",
     review_due: "到期复盘",
     candidate_review: "待审商机",
@@ -44,7 +49,7 @@ export default async function DashboardPage() {
           <h1>中港智拓 · 海外工程经营智能中枢</h1>
           <div className="muted">持续感知市场、识别机会、汇聚证据、辅助判断并推动经营行动，把分散信息转化为组织可复用的经营能力。</div>
         </div>
-        <Link className="primary-button" href="/knowledge">进入经营情报</Link>
+        <Link className="primary-button" href="/pursuit">进入经营协同</Link>
       </header>
 
       <section className="section" style={{ marginBottom: 18 }}>
@@ -61,15 +66,15 @@ export default async function DashboardPage() {
           <>
             <div className="cockpit-strip" style={{ marginTop: 14 }}>
               <Link href="/knowledge"><span>新增候选</span><strong>{brief.summary.new_candidates}</strong><small>待审共 {brief.summary.pending_candidates}</small></Link>
-              <Link href="/tracking"><span>逾期行动</span><strong>{brief.summary.overdue_actions}</strong><small>7 日内到期 {brief.summary.due_soon_actions}</small></Link>
-              <Link href="/tracking"><span>未关闭预警</span><strong>{brief.summary.open_alerts}</strong><small>需要经营处置</small></Link>
-              <Link href="/tracking"><span>到期复盘</span><strong>{brief.summary.review_due}</strong><small>重点机会 Review</small></Link>
+              <Link href="/pursuit"><span>执行提醒</span><strong>{brief.summary.active_reminders}</strong><small>Critical {brief.summary.critical_reminders} · 已升级 {brief.summary.escalated_reminders}</small></Link>
+              <Link href="/pursuit"><span>逾期工作</span><strong>{brief.summary.overdue_actions}</strong><small>7 日内到期 {brief.summary.due_soon_actions}</small></Link>
+              <Link href="/tracking"><span>未关闭预警</span><strong>{brief.summary.open_alerts}</strong><small>Legacy 经营预警</small></Link>
               <Link href="/knowledge"><span>最近变化</span><strong>{brief.summary.recent_events}</strong><small>过去 {brief.window_hours} 小时 Event</small></Link>
             </div>
 
             <div className="grid-2" style={{ marginTop: 16 }}>
               <div>
-                <div className="section-head"><h2>优先处理</h2><span className="muted small">按风险与时效排序</span></div>
+                <div className="section-head"><h2>优先处理</h2><span className="muted small">Critical / Escalated 优先</span></div>
                 {brief.attention.length ? (
                   <div className="stack">
                     {brief.attention.slice(0, 8).map((item) => (
@@ -80,11 +85,12 @@ export default async function DashboardPage() {
                         </div>
                         <div className="muted small" style={{ marginTop: 6 }}>{item.subtitle}</div>
                         {item.due_at ? <div className="muted small" style={{ marginTop: 4 }}>时间：{formatDate(item.due_at)}</div> : null}
+                        {item.escalated_to ? <div className="muted small" style={{ marginTop: 4 }}>已升级：{item.escalated_to}</div> : null}
                         {item.message ? <div style={{ marginTop: 5 }}>{item.message}</div> : null}
                       </Link>
                     ))}
                   </div>
-                ) : <div className="muted">当前没有需要优先处理的 Candidate、逾期行动、预警或到期复盘。</div>}
+                ) : <div className="muted">当前没有需要优先处理的 Candidate、执行升级、逾期事项或经营预警。</div>}
               </div>
 
               <div>
@@ -140,7 +146,7 @@ export default async function DashboardPage() {
         <Link href="/knowledge"><span>待审 Candidate</span><strong>{brief?.summary.pending_candidates ?? radar.pending_draft_count}</strong><small>人工确认后才进入正式机会</small></Link>
         <Link href="/opportunities"><span>正式机会</span><strong>{opportunities.length}</strong><small>其中 A 级 {aCount} 个</small></Link>
         <Link href="/knowledge"><span>证据沉淀</span><strong>{radar.evidence_count}</strong><small>结构化 Evidence</small></Link>
-        <Link href="/tracking"><span>高置信研判</span><strong>{highConfidence}</strong><small>置信度 ≥ 80%</small></Link>
+        <Link href="/pursuit"><span>高置信研判</span><strong>{highConfidence}</strong><small>进入协同后落实责任</small></Link>
       </section>
 
       <div className="grid-2 cockpit-main">
@@ -161,7 +167,7 @@ export default async function DashboardPage() {
               <div className="hero-actions">
                 <Link href={`/knowledge/opportunities/${encodeURIComponent(focus.id)}`}>360°知识视图</Link>
                 <Link href={`/opportunities/${encodeURIComponent(focus.id)}`}>查看研判</Link>
-                <Link href="/tracking">进入跟踪</Link>
+                <Link href={`/pursuit/opportunities/${encodeURIComponent(focus.id)}`}>经营协同</Link>
                 <Link href={`/strategy?id=${encodeURIComponent(focus.id)}`}>经营策略</Link>
               </div>
             </>
@@ -194,7 +200,7 @@ export default async function DashboardPage() {
         <div className="journey">
           <Link href="/knowledge"><b>1. 感知</b><span>Source → Candidate → Entity / Evidence</span></Link><i>→</i>
           <Link href="/opportunities"><b>2. 判断</b><span>Opportunity → Score / Confidence / Re-score</span></Link><i>→</i>
-          <Link href="/tracking"><b>3. 协同</b><span>Watch / Alert / Action → 责任与执行</span></Link><i>→</i>
+          <Link href="/pursuit"><b>3. 协同</b><span>Work Item / Gate / Review / Reminder → 推动完成</span></Link><i>→</i>
           <Link href="/knowledge/entities"><b>4. 记忆</b><span>Entity / Knowledge → 企业经营资产</span></Link><i>→</i>
           <div><b>5. 学习</b><span>Outcome / Win-Loss → 后续阶段校准</span></div>
         </div>

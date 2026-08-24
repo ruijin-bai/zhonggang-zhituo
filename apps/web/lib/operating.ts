@@ -13,6 +13,9 @@ export type DailyBrief = {
     overdue_actions: number;
     due_soon_actions: number;
     review_due: number;
+    active_reminders: number;
+    critical_reminders: number;
+    escalated_reminders: number;
   };
   recent_events: Array<{
     kind: "opportunity_event";
@@ -23,13 +26,25 @@ export type DailyBrief = {
     payload: Record<string, unknown>;
   }>;
   attention: Array<{
-    kind: "overdue_action" | "open_alert" | "review_due" | "candidate_review";
+    kind:
+      | "pursuit_reminder"
+      | "overdue_work_item"
+      | "overdue_action"
+      | "open_alert"
+      | "review_due"
+      | "candidate_review";
     severity: string;
     resource_id: string;
     opportunity_id: string | null;
     title: string;
     subtitle: string;
     owner?: string;
+    recipient?: string;
+    escalated_to?: string | null;
+    escalation_level?: number;
+    status?: string;
+    source?: string;
+    first_triggered_at?: string;
     due_at?: string | null;
     created_at?: string;
     message?: string;

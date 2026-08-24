@@ -10,7 +10,8 @@ type PursuitAction =
   | "open_gate"
   | "request_review"
   | "submit_review"
-  | "record_decision";
+  | "record_decision"
+  | "acknowledge_reminder";
 
 type MutationBody = {
   action?: PursuitAction;
@@ -20,6 +21,7 @@ type MutationBody = {
   work_item_id?: string;
   gate_id?: string;
   review_id?: string;
+  reminder_id?: string;
   payload?: Record<string, unknown>;
 };
 
@@ -70,6 +72,11 @@ function mutationTarget(body: MutationBody): { path: string; method: "POST" | "P
       return {
         path: `/api/pursuit/gates/${encodeURIComponent(required(body.gate_id, "gate_id"))}/decisions`,
         method: "POST",
+      };
+    case "acknowledge_reminder":
+      return {
+        path: `/api/pursuit/reminders/${encodeURIComponent(required(body.reminder_id, "reminder_id"))}/acknowledge`,
+        method: "PUT",
       };
     default:
       throw new Error("不支持的 Pursuit 操作");

@@ -133,21 +133,21 @@ Stage A 已于 `eddc8aaf` 合入 `main`。首页和经营情报工作台已经�
 
 目标：从“告诉经营人员应该做什么”升级为“推动组织把事情做完”。
 
-### B1 — 协同与决策内核（当前分支）
+### B1 — 协同与决策内核（已完成）
 
-- [x] `PursuitWorkspace`（本分支实现，待 CI）
-- [x] Work Item 绑定真实 `Membership`（本分支实现，待 CI）
-- [x] Lead / Contributor / Reviewer / Watcher（本分支实现，待 CI）
-- [x] Deadline / Priority / Status（本分支实现，待 CI）
-- [x] Dependency / Blocker（本分支实现，待 CI）
-- [x] Decision Gate（本分支实现，待 CI）
-- [x] Go / Hold / No-Go append-only Decision Record（本分支实现，待 CI）
-- [x] Review / Approval lineage（本分支实现，待 CI）
-- [x] `My Work` 读模型（本分支实现，待 CI）
-- [x] `Team Work` 读模型（本分支实现，待 CI）
-- [x] `Portfolio` 读模型（本分支实现，待 CI）
-- [x] PostgreSQL RLS + runtime role grants（本分支实现，待 CI）
-- [x] Tracking v1 → canonical Work Item 单向兼容桥（本分支实现，待 CI）
+- [x] `PursuitWorkspace`
+- [x] Work Item 绑定真实 `Membership`
+- [x] Lead / Contributor / Reviewer / Watcher
+- [x] Deadline / Priority / Status
+- [x] Dependency / Blocker
+- [x] Decision Gate
+- [x] Go / Hold / No-Go append-only Decision Record
+- [x] Review / Approval lineage
+- [x] `My Work` / `Team Work` / `Portfolio` 读模型
+- [x] PostgreSQL RLS + runtime role grants
+- [x] Tracking v1 → canonical Work Item 单向兼容桥
+
+B1 已于 `260eaacd` 合入 `main`。
 
 兼容原则：
 
@@ -156,35 +156,45 @@ Stage A 已于 `eddc8aaf` 合入 `main`。首页和经营情报工作台已经�
 - 旧写入单向同步到新模型，防止新增历史入口造成数据丢失；
 - 旧字符串负责人只保存为 `legacy_owner_text`，绝不自动伪装成真实用户；
 - 新 Stage B 写入不反向制造旧 Action；
-- 后续 Web 切换完成后再移除 Tracking v1 写入口。
+- Web 已切换到 `/pursuit`，Tracking v1 仅保留兼容入口，后续再做 Contract 清理。
 
-### B2 — 协同工作台（B1 合入后立即推进）
+### B2 — 协同工作台（已完成）
 
-- [ ] My Work Web
-- [ ] Team Work Web
-- [ ] Pursuit Workspace Web
-- [ ] blocked / overdue / dependency 视图
-- [ ] Gate / Review / Decision UI
-- [ ] Portfolio 管理视图
-- [ ] Opportunity 360° → Pursuit Workspace 连续入口
+- [x] My Work Web
+- [x] Team Work Web
+- [x] Pursuit Workspace Web
+- [x] blocked / overdue / dependency 视图
+- [x] Gate / Review / Decision UI
+- [x] Portfolio 管理视图
+- [x] Opportunity 360° → Pursuit Workspace 连续入口
+- [x] 白名单 BFF + 浏览器稳定 Idempotency-Key
 
-### B3 — 提醒与升级
+B2 已于 `5f4db141` 合入 `main`。
 
-- [ ] Reminder policy
-- [ ] Escalation policy
-- [ ] overdue / review-due notifications
-- [ ] 邮件 / Teams / 企业微信 / OA 至少一个通知出口
+### B3 — 提醒与升级（当前分支）
+
+- [x] Durable `PursuitReminder` ledger（本分支实现，待 CI）
+- [x] due-soon / overdue / blocked / Gate / Review / Workspace review policy（本分支实现，待 CI）
+- [x] `blocked_since` 精确阻塞时长（本分支实现，待 CI）
+- [x] Reminder dedup / acknowledge / auto-resolve / recurrence count（本分支实现，待 CI）
+- [x] overdue / blocked / pending-review escalation to Workspace Lead（本分支实现，待 CI）
+- [x] Beat dispatcher → per-tenant Worker reconciliation（本分支实现，待 CI）
+- [x] My Work Reminder Inbox + 受控“已知悉”（本分支实现，待 CI）
+- [x] Critical / Escalated Reminder → Daily Brief（本分支实现，待 CI）
+- [x] PostgreSQL RLS + runtime grants + lifecycle/idempotency tests（本分支实现，待 CI）
+
+外部邮件 / Teams / 企业微信 / OA **不作为 B3 的事实模型组成部分**。B3 先把“为何提醒、提醒谁、何时升级、是否知悉、何时解除”沉淀为系统事实；Stage C 再选择一个企业通知渠道作为 Delivery Adapter，避免业务规则绑死在外部工具上。
 
 Stage B 完成标准：
 
-> 一个 Opportunity 从正式确认入池到决策、行动、复核和退出/继续投入，全部能够回答“谁、何时、做了什么、依据什么、结果如何”。
+> 一个 Opportunity 从正式确认入池到决策、行动、复核和退出/继续投入，全部能够回答“谁、何时、做了什么、依据什么、结果如何”；执行异常能够被系统主动识别、提醒、升级并在解除后自动关闭。
 
 ## 7. Stage C — 企业连接与真实数据
 
 按最小业务价值优先连接，不以连接器数量为目标：
 
 1. [ ] 企业身份目录深化；
-2. [ ] 邮件 / Teams / 企业微信 / OA 通知之一；
+2. [ ] 邮件 / Teams / 企业微信 / OA 通知 Delivery Adapter 之一；
 3. [ ] CRM / 市场项目主数据；
 4. [ ] 历史投标 / 中标 / 失标数据；
 5. [ ] 企业知识库；

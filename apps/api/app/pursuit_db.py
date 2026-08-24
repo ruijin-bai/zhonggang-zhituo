@@ -107,6 +107,9 @@ class PursuitWorkItemRecord(TenantScopedMixin, Base):
     priority: Mapped[str] = mapped_column(String(20), default="medium", index=True)
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     blocked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    blocked_since: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     dependency_work_item_id: Mapped[str | None] = mapped_column(
         ForeignKey("pursuit_work_items.id", ondelete="SET NULL"),
         nullable=True,
@@ -118,6 +121,23 @@ class PursuitWorkItemRecord(TenantScopedMixin, Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now, index=True
     )
+
+
+@event.listens_for(PursuitWorkItemRecord, "before_insert")
+def _initialize_blocked_since(mapper, connection, target: PursuitWorkItemRecord) -> None:
+    if target.status == "blocked" and target.blocked_since is None:
+        target.blocked_since = utc_now()
+    elif target.status != "blocked":
+        target.blocked_since = None
+
+
+@event.listens_for(PursuitWorkItemRecord, "before_update")
+def _maintain_blocked_since(mapper, connection, target: PursuitWorkItemRecord) -> None:
+    if target.status == "blocked":
+        if target.blocked_since is None:
+            target.blocked_since = utc_now()
+    else:
+        target.blocked_since = None
 
 
 class PursuitDecisionGateRecord(TenantScopedMixin, Base):

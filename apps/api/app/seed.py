@@ -31,6 +31,7 @@ from .pursuit_db import (
     PursuitWorkspaceRecord,
 )
 from .pursuit_legacy import sync_legacy_tracking_snapshot
+from .pursuit_reminder_db import PursuitReminderRecord
 from .scoring import calculate_score
 
 DATA_FILE = Path(__file__).resolve().parents[3] / "data" / "demo" / "opportunities.json"
@@ -80,6 +81,9 @@ def _delete_demo_pursuit(session: Session, demo_ids: list[str]) -> None:
                 PursuitDecisionGateRecord.opportunity_id.in_(demo_ids)
             )
         ).all()
+    )
+    session.execute(
+        delete(PursuitReminderRecord).where(PursuitReminderRecord.opportunity_id.in_(demo_ids))
     )
     if gate_ids:
         session.execute(delete(PursuitDecisionRecord).where(PursuitDecisionRecord.gate_id.in_(gate_ids)))

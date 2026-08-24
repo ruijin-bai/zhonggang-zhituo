@@ -1,7 +1,9 @@
 import Link from "next/link";
 
-import { getMyWork } from "@/lib/pursuit";
+import { getMyWork, getPursuitReminders } from "@/lib/pursuit";
+import { canEditPursuit, getSessionMeta } from "@/lib/session";
 import PursuitNav from "./pursuit-nav";
+import PursuitReminderInbox from "./reminder-inbox";
 import styles from "./pursuit.module.css";
 
 function dateLabel(value: string | null): string {
@@ -21,11 +23,16 @@ function statusClass(status: string): string {
 }
 
 export default async function PursuitMyWorkPage() {
-  const data = await getMyWork();
+  const [data, reminders, session] = await Promise.all([
+    getMyWork(),
+    getPursuitReminders(),
+    getSessionMeta(),
+  ]);
   const blocked = data.work_items.filter((item) => item.status === "blocked").length;
   const overdue = data.work_items.filter(
     (item) => item.due_at && new Date(item.due_at).getTime() < Date.now(),
   ).length;
+  const criticalReminders = reminders.items.filter((item) => item.severity === "critical").length;
 
   return (
     <>
@@ -35,7 +42,7 @@ export default async function PursuitMyWorkPage() {
           <h1>我的经营工作</h1>
           <div className="muted">
             {data.membership
-              ? `${data.membership.display_name} · ${data.membership.role} · 只显示当前账号真实绑定的 Work Item 与 Review。`
+              ? `${data.membership.display_name} · ${data.membership.role} · 只显示当前账号真实绑定的 Work Item、Review 与 Reminder。`
               : "当前账号尚未解析到有效 Membership。"}
           </div>
         </div>
@@ -45,16 +52,22 @@ export default async function PursuitMyWorkPage() {
 
       <section className={styles.metrics}>
         <div className={styles.metric}><span>我的未结事项</span><strong>{data.work_items.length}</strong></div>
-        <div className={styles.metric}><span>已阻塞</span><strong>{blocked}</strong></div>
-        <div className={styles.metric}><span>已逾期</span><strong>{overdue}</strong></div>
+        <div className={styles.metric}><span>主动提醒</span><strong>{reminders.count}</strong></div>
+        <div className={styles.metric}><span>Critical</span><strong>{criticalReminders}</strong></div>
         <div className={styles.metric}><span>待我复核</span><strong>{data.pending_reviews.length}</strong></div>
       </section>
+
+      <PursuitReminderInbox data={reminders} canAcknowledge={canEditPursuit(session.role)} />
 
       <div className={styles.grid2}>
         <section className={styles.section}>
           <div className={styles.sectionHead}>
             <h2>我的 Work Items</h2>
             <span className={styles.meta}>参与 {data.workspace_count} 个 Pursuit Workspace</span>
+          </div>
+          <div className={styles.badges} style={{ marginBottom: 12 }}>
+            <span className={styles.badge}>Blocked {blocked}</span>
+            <span className={styles.badge}>Overdue {overdue}</span>
           </div>
           {data.work_items.length ? (
             <div className={styles.list}>

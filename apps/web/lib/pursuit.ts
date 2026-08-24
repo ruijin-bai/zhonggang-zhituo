@@ -22,6 +22,7 @@ export type PursuitWorkItem = {
   priority: string;
   due_at: string | null;
   blocked_reason: string | null;
+  blocked_since?: string | null;
   dependency_work_item_id: string | null;
   completed_at: string | null;
   created_at: string;
@@ -116,6 +117,34 @@ export type MyWork = {
   workspace_count: number;
 };
 
+export type PursuitReminderInbox = {
+  membership_id: number;
+  count: number;
+  items: Array<{
+    id: string;
+    workspace_id: string;
+    opportunity_id: string;
+    opportunity_title: string;
+    recipient_membership_id: number;
+    escalated_to_membership_id: number | null;
+    is_escalation: boolean;
+    work_item_id: string | null;
+    gate_id: string | null;
+    review_id: string | null;
+    type: string;
+    severity: "critical" | "high" | "warning" | "info" | string;
+    status: "open" | "acknowledged" | string;
+    title: string;
+    message: string;
+    source_due_at: string | null;
+    escalation_level: number;
+    occurrence_count: number;
+    first_triggered_at: string;
+    last_triggered_at: string;
+    acknowledged_at: string | null;
+  }>;
+};
+
 export type TeamWork = {
   count: number;
   workspaces: Array<{
@@ -182,6 +211,10 @@ export function getPursuitMembers(): Promise<PursuitMember[]> {
 
 export function getMyWork(): Promise<MyWork> {
   return readJson<MyWork>("/api/pursuit/my-work");
+}
+
+export function getPursuitReminders(): Promise<PursuitReminderInbox> {
+  return readJson<PursuitReminderInbox>("/api/pursuit/reminders");
 }
 
 export function getTeamWork(): Promise<TeamWork> {
