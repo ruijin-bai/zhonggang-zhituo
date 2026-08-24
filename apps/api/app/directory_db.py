@@ -50,6 +50,24 @@ class DirectoryRoleRuleRecord(TenantScopedMixin, Base):
     )
 
 
+class DirectorySyncRunRecord(TenantScopedMixin, Base):
+    __tablename__ = "directory_sync_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    source_id: Mapped[str] = mapped_column(
+        ForeignKey("directory_sources.id", ondelete="CASCADE"), index=True
+    )
+    snapshot_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    received_count: Mapped[int] = mapped_column(Integer, default=0)
+    summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    actor_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="applied", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class DirectoryIdentityLinkRecord(TenantScopedMixin, Base):
     __tablename__ = "directory_identity_links"
     __table_args__ = (
@@ -75,30 +93,16 @@ class DirectoryIdentityLinkRecord(TenantScopedMixin, Base):
         ForeignKey("memberships.id", ondelete="CASCADE"), index=True
     )
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
-    last_seen_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    last_seen_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("directory_sync_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
-
-
-class DirectorySyncRunRecord(TenantScopedMixin, Base):
-    __tablename__ = "directory_sync_runs"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    source_id: Mapped[str] = mapped_column(
-        ForeignKey("directory_sources.id", ondelete="CASCADE"), index=True
-    )
-    snapshot_sha256: Mapped[str] = mapped_column(String(64), index=True)
-    received_count: Mapped[int] = mapped_column(Integer, default=0)
-    summary: Mapped[dict] = mapped_column(JSON, default=dict)
-    actor_user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), index=True
-    )
-    status: Mapped[str] = mapped_column(String(20), default="applied", index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 _DIRECTORY_TENANT_MODELS = (
