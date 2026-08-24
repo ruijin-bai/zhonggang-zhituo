@@ -114,94 +114,72 @@
 - [x] source/evidence provenance
 - [x] tenant-safe search through existing RLS-backed facts
 
-## 5. 已有但尚未升级为“操作系统级”的能力
+## 5. Stage A — 经营工作台产品化（已完成）
 
-- [x] Opportunity scoring / confidence
-- [x] dynamic re-evaluation
-- [x] Pursuit Thesis
-- [x] Strategy workspace
-- [x] red-team challenge
-- [x] WatchItem / Action / Alert 基础对象
-- [x] Battlecard
-
-这些对象目前能够演示经营闭环，但还没有完成真实团队协同所需的用户、审批、依赖、提醒、升级和 Portfolio 语义。
-
-## 6. Stage A — 经营工作台产品化
-
-目标：把已经成熟的后端能力变成真实市场人员每天可以使用的入口。
-
-当前执行：
-
-- [x] 统一经营情报 Web 工作台骨架
-- [x] Candidate Inbox 只读入口
+- [x] 统一经营情报 Web 工作台
+- [x] Candidate Inbox + 受控 confirm / reject / attach evidence
 - [x] 全局 Search Web
 - [x] Opportunity 360° Web
-- [x] Opportunity ↔ Knowledge View 连续导航
-- [x] 新北极星导航与产品文案
-- [x] Web CI / production image 验证并合入 main
-- [x] Candidate confirm / reject 受控 UI
-- [x] attach additional evidence UI
-- [x] Entity 专属浏览页（本分支实现，待 CI 合并）
-- [x] 首页“今天发生什么 / 我需要处理什么” Daily Brief（本分支实现，待 CI 合并）
+- [x] Entity 360° Web
+- [x] Opportunity / Candidate / Entity 连续导航
+- [x] Daily Brief：“今天发生什么 / 我需要处理什么”
+- [x] viewer / analyst / manager / admin 审核边界
+- [x] Candidate 审核业务幂等 + Audit
+- [x] Web check / build / production image / full `zhituo/ci-gate`
 
-Candidate 审核设计原则：
+Stage A 已于 `eddc8aaf` 合入 `main`。首页和经营情报工作台已经从比赛入口转为日常经营入口。
 
-- viewer / analyst 可查看，不可审核；
-- manager / admin 才显示并允许审核动作；
-- 后端 RBAC 始终为最终权限边界；
-- confirm / reject / attach 全部使用业务幂等；
-- 审核动作写入 Audit Log；
-- confirm 入正式机会池前重新从 DocumentStore 读取并校验规范原文；
-- 疑似已有 Opportunity 只允许经营人员人工选择“作为补充证据挂接”，机器不擅自合并正式项目。
-
-Daily Brief 设计原则：
-
-- 直接聚合现有 Candidate / Opportunity Event / Action / Alert / Watch 事实；
-- 不新建第二套待办状态表；
-- 所有查询继续受 ORM Tenant Scope + PostgreSQL RLS；
-- 首页不再以固定比赛英雄案例作为首要入口；
-- 实时晨报失败时显式失败，不用 Demo 数据伪装实时待办。
-
-Stage A 完成标准：
-
-1. 核心情报查询路径不超过 3 次点击；
-2. 真实 API 数据，无生产 Demo fallback；
-3. 搜索结果可追溯到 Opportunity / Evidence / Source；
-4. Candidate 审核动作受 RBAC、幂等和审计保护；
-5. Web check / build / production image / full ci-gate 全绿。
-
-> 本分支通过 `zhituo/ci-gate` 并合入后，Stage A 正式封口。
-
-## 7. 下一主战场：Stage B — Pursuit Orchestration
+## 6. 当前主战场：Stage B — Pursuit Orchestration
 
 目标：从“告诉经营人员应该做什么”升级为“推动组织把事情做完”。
 
-### P0 数据模型
+### B1 — 协同与决策内核（当前分支）
 
-- [ ] Pursuit Workspace
-- [ ] Action 绑定真实 User / Membership
-- [ ] Collaborator / Watcher
-- [ ] Deadline / Priority / Status
-- [ ] Dependency / Blocker
-- [ ] Decision Gate
-- [ ] Go / Hold / No-Go Decision Record
-- [ ] Review / Approval lineage
+- [x] `PursuitWorkspace`（本分支实现，待 CI）
+- [x] Work Item 绑定真实 `Membership`（本分支实现，待 CI）
+- [x] Lead / Contributor / Reviewer / Watcher（本分支实现，待 CI）
+- [x] Deadline / Priority / Status（本分支实现，待 CI）
+- [x] Dependency / Blocker（本分支实现，待 CI）
+- [x] Decision Gate（本分支实现，待 CI）
+- [x] Go / Hold / No-Go append-only Decision Record（本分支实现，待 CI）
+- [x] Review / Approval lineage（本分支实现，待 CI）
+- [x] `My Work` 读模型（本分支实现，待 CI）
+- [x] `Team Work` 读模型（本分支实现，待 CI）
+- [x] `Portfolio` 读模型（本分支实现，待 CI）
+- [x] PostgreSQL RLS + runtime role grants（本分支实现，待 CI）
+- [x] Tracking v1 → canonical Work Item 单向兼容桥（本分支实现，待 CI）
 
-### P0 工作流
+兼容原则：
 
-- [ ] My Work
-- [ ] Team Work
-- [ ] overdue / blocked views
-- [ ] Reminder
-- [ ] Escalation
-- [ ] Portfolio
-- [ ] management resource/risk view
+- Stage B 的 `PursuitWorkItem` 是新的权威协同事实；
+- 旧 `pursuit_actions` 仅为 Tracking v1 兼容对象；
+- 旧写入单向同步到新模型，防止新增历史入口造成数据丢失；
+- 旧字符串负责人只保存为 `legacy_owner_text`，绝不自动伪装成真实用户；
+- 新 Stage B 写入不反向制造旧 Action；
+- 后续 Web 切换完成后再移除 Tracking v1 写入口。
+
+### B2 — 协同工作台（B1 合入后立即推进）
+
+- [ ] My Work Web
+- [ ] Team Work Web
+- [ ] Pursuit Workspace Web
+- [ ] blocked / overdue / dependency 视图
+- [ ] Gate / Review / Decision UI
+- [ ] Portfolio 管理视图
+- [ ] Opportunity 360° → Pursuit Workspace 连续入口
+
+### B3 — 提醒与升级
+
+- [ ] Reminder policy
+- [ ] Escalation policy
+- [ ] overdue / review-due notifications
+- [ ] 邮件 / Teams / 企业微信 / OA 至少一个通知出口
 
 Stage B 完成标准：
 
 > 一个 Opportunity 从正式确认入池到决策、行动、复核和退出/继续投入，全部能够回答“谁、何时、做了什么、依据什么、结果如何”。
 
-## 8. Stage C — 企业连接与真实数据
+## 7. Stage C — 企业连接与真实数据
 
 按最小业务价值优先连接，不以连接器数量为目标：
 
@@ -214,7 +192,7 @@ Stage B 完成标准：
 
 原则：外部系统继续作为其权威事实源，智拓只保存智能上下文、映射、审计和必要快照。
 
-## 9. Stage D — Outcome / Learning Loop
+## 8. Stage D — Outcome / Learning Loop
 
 - [ ] Opportunity Outcome
 - [ ] Bid / No-Bid
@@ -229,7 +207,7 @@ Stage B 完成标准：
 
 目标：让企业历史经营结果反向改善下一次机会判断，而不是长期依赖静态经验规则。
 
-## 10. Stage E — Beta 企业治理
+## 9. Stage E — Beta 企业治理
 
 - [ ] Secret Manager / KMS
 - [ ] Prompt / Schema / Model Version Governance
@@ -241,7 +219,7 @@ Stage B 完成标准：
 - [ ] Canary / rolling / rollback gate
 - [ ] PostgreSQL / Redis HA（业务证明需要后）
 
-## 11. 暂缓事项
+## 10. 暂缓事项
 
 在 Stage B 完成前，不把以下内容作为主线优先级：
 
@@ -254,7 +232,7 @@ Stage B 完成标准：
 - 过早微服务化；
 - 重造 CRM / OA / ERP。
 
-## 12. Production Definition of Done
+## 11. Production Definition of Done
 
 功能只有同时满足以下条件才算完成：
 
