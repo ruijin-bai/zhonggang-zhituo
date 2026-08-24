@@ -9,9 +9,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .connectors import ConnectorResult, connector_kinds, fetch_documents
+from .db import utc_now
 from .document_store import DocumentStore, build_document_store
 from .source_db import SourceDocumentRecord, SourceFetchRecord
-from .db import utc_now
 
 
 class SourceFetchRequest(BaseModel):
@@ -33,6 +33,7 @@ class SourceArchiveResult(BaseModel):
     source_url: str
     fetch_id: str
     fetch_created: bool
+    fetch_seen_count: int
     raw_object_created: bool
     text_objects_created: int
     documents_created: int
@@ -54,6 +55,11 @@ def _find_fetch(session: Session, result: ConnectorResult) -> SourceFetchRecord 
     )
 
 
+def _mark_fetch_seen(record: SourceFetchRecord) -> None:
+    record.seen_count += 1
+    record.last_fetched_at = utc_now()
+
+
 def _get_or_create_fetch(
     session: Session,
     result: ConnectorResult,
@@ -63,8 +69,10 @@ def _get_or_create_fetch(
 ) -> tuple[SourceFetchRecord, bool]:
     existing = _find_fetch(session, result)
     if existing is not None:
+        _mark_fetch_seen(existing)
         return existing, False
 
+    now = utc_now()
     record = SourceFetchRecord(
         id=str(uuid4()),
         connector=result.connector,
@@ -75,6 +83,9 @@ def _get_or_create_fetch(
         raw_size_bytes=result.source_raw_size_bytes,
         raw_object_key=raw_object_key,
         storage_backend=storage_backend,
+        seen_count=1,
+        first_fetched_at=now,
+        last_fetched_at=now,
     )
     try:
         with session.begin_nested():
@@ -85,6 +96,7 @@ def _get_or_create_fetch(
         existing = _find_fetch(session, result)
         if existing is None:
             raise
+        _mark_fetch_seen(existing)
         return existing, False
 
 
@@ -97,6 +109,21 @@ def _find_document(session: Session, *, canonical_url: str, content_sha256: str)
     )
 
 
+def _mark_document_seen(
+    record: SourceDocumentRecord,
+    *,
+    fetch_record: SourceFetchRecord,
+    document,
+) -> None:
+    record.latest_fetch_id = fetch_record.id
+    record.last_seen_at = utc_now()
+    record.seen_count += 1
+    record.title = document.title
+    record.publisher = document.publisher
+    record.published_at = document.published_at
+    record.connector_metadata = document.metadata
+
+
 def _upsert_document(
     session: Session,
     *,
@@ -106,22 +133,16 @@ def _upsert_document(
     text_object_key: str,
     storage_backend: str,
 ) -> tuple[SourceDocumentRecord, bool]:
-    now = utc_now()
     existing = _find_document(
         session,
         canonical_url=document.canonical_url,
         content_sha256=document.content_sha256,
     )
     if existing is not None:
-        existing.latest_fetch_id = fetch_record.id
-        existing.last_seen_at = now
-        existing.seen_count += 1
-        existing.title = document.title
-        existing.publisher = document.publisher
-        existing.published_at = document.published_at
-        existing.connector_metadata = document.metadata
+        _mark_document_seen(existing, fetch_record=fetch_record, document=document)
         return existing, False
 
+    now = utc_now()
     record = SourceDocumentRecord(
         id=str(uuid4()),
         connector=connector,
@@ -154,9 +175,7 @@ def _upsert_document(
         )
         if existing is None:
             raise
-        existing.latest_fetch_id = fetch_record.id
-        existing.last_seen_at = now
-        existing.seen_count += 1
+        _mark_document_seen(existing, fetch_record=fetch_record, document=document)
         return existing, False
 
 
@@ -173,6 +192,8 @@ def archive_connector_result(
         raise ValueError("connector result does not contain its raw source payload")
     if len(raw) != result.source_raw_size_bytes:
         raise ValueError("connector raw payload size does not match metadata")
+    if sha256(raw).hexdigest() != result.source_raw_sha256:
+        raise ValueError("connector raw payload digest does not match metadata")
 
     resolved_store = store or build_document_store()
     raw_object = resolved_store.put(
@@ -193,6 +214,8 @@ def archive_connector_result(
     text_objects_created = 0
     for document in result.documents:
         text_bytes = document.text.encode("utf-8")
+        if sha256(text_bytes).hexdigest() != document.content_sha256:
+            raise ValueError("normalized document digest does not match text payload")
         text_object = resolved_store.put(
             namespace="text",
             digest=document.content_sha256,
@@ -228,6 +251,7 @@ def archive_connector_result(
         source_url=result.source_url,
         fetch_id=fetch_record.id,
         fetch_created=fetch_created,
+        fetch_seen_count=fetch_record.seen_count,
         raw_object_created=raw_object.created,
         text_objects_created=text_objects_created,
         documents_created=documents_created,
