@@ -13,17 +13,17 @@ permissions:
 jobs:
   web:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
-      - run: npm run check
-      - run: npm run build
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install locked Web dependencies
+        run: npm ci
+      - run: npm --workspace apps/web run check
+      - run: npm --workspace apps/web run build
 
   api:
     runs-on: ubuntu-latest
@@ -78,20 +78,22 @@ jobs:
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
           /usr/lib/postgresql/17/bin/pg_dump --version
           /usr/lib/postgresql/17/bin/pg_restore --version
-      - run: python -m pip install --upgrade pip
-      - run: pip install -e '.[dev]'
-      - name: Verify dependency graph
-        run: pip check
+      - name: Install uv
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'uv>=0.8,<1'
+      - name: Install locked API dependencies
+        run: uv sync --locked --extra dev
       - name: Compile Python sources
-        run: python -m compileall -q app
+        run: uv run python -m compileall -q app
       - name: Validate operations shell scripts
         run: bash -n ../../ops/postgres/backup.sh ../../ops/postgres/restore.sh
       - name: Apply database migrations on clean PostgreSQL
-        run: alembic upgrade head
+        run: uv run alembic upgrade head
       - name: Verify latest migration downgrade and re-upgrade
         run: |
-          alembic downgrade -1
-          alembic upgrade head
+          uv run alembic downgrade -1
+          uv run alembic upgrade head
       - name: Provision and verify least-privilege database roles
         env:
           PGPASSWORD: zhituo
@@ -108,13 +110,13 @@ jobs:
           test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_runtime','background_jobs','INSERT')")" = "t"
           test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_backup','background_jobs','INSERT')")" = "f"
       - name: Verify Redis connectivity
-        run: python -c "from redis import Redis; assert Redis.from_url('redis://127.0.0.1:6379/0').ping()"
+        run: uv run python -c "from redis import Redis; assert Redis.from_url('redis://127.0.0.1:6379/0').ping()"
       - name: Run unit, integration and PostgreSQL RLS tests
-        run: pytest -q
+        run: uv run pytest -q
       - name: Verify repeatable demo seed and CLI
         run: |
-          zhituo-api reset-demo
-          zhituo-api status
+          uv run zhituo-api reset-demo
+          uv run zhituo-api status
       - name: Exercise PostgreSQL backup and restore to isolated database
         env:
           PGPASSWORD: zhituo
@@ -153,8 +155,8 @@ jobs:
         run: docker build --pull -t zhituo-api:ci apps/api
       - name: Smoke import API production image
         run: docker run --rm --entrypoint python zhituo-api:ci -c "import app.main; print('api-import-ok')"
-      - name: Build Web production image
-        run: docker build --pull -t zhituo-web:ci apps/web
+      - name: Build Web production image from locked workspace
+        run: docker build --pull -f apps/web/Dockerfile -t zhituo-web:ci .
 
   security:
     runs-on: ubuntu-latest
@@ -163,23 +165,29 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Audit Python runtime dependencies and generate CycloneDX SBOM
+      - name: Audit locked Python runtime dependencies and generate CycloneDX SBOM
         run: |
           python -m pip install --upgrade pip
-          pip install ./apps/api
-          pip install 'pip-audit>=2.9,<3'
-          pip-audit --local --format cyclonedx-json --output api-sbom.cdx.json
+          pip install 'uv>=0.8,<1' 'pip-audit>=2.9,<3'
+          cd apps/api
+          uv sync --locked
+          cd ../..
+          pip-audit \
+            --path apps/api/.venv/lib/python3.12/site-packages \
+            --format cyclonedx-json \
+            --output api-sbom.cdx.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Resolve, lock and audit Web production dependencies
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Audit locked Web production dependencies
         run: |
-          npm install --package-lock=true
-          test -s package-lock.json
+          npm ci
           npm audit --omit=dev --audit-level=high
       - name: Generate Web CycloneDX SBOM
         run: npm sbom --workspace apps/web --sbom-format cyclonedx > web-sbom.cdx.json
-      - name: Upload software bills of materials and generated monorepo lockfile
+      - name: Upload software bills of materials and dependency locks
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -188,7 +196,8 @@ jobs:
             api-sbom.cdx.json
             web-sbom.cdx.json
             package-lock.json
-          if-no-files-found: warn
+            apps/api/uv.lock
+          if-no-files-found: error
           retention-days: 30
 
   ci-gate:
