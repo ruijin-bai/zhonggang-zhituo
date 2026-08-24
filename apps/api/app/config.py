@@ -58,13 +58,33 @@ class Settings(BaseSettings):
     candidate_dispatch_batch_size: int = 50
     candidate_draft_duplicate_threshold: float = 0.88
 
-    # Pursuit reminders are durable in-product facts. External mail/Teams/WeCom delivery can be
-    # attached later without changing the reminder or escalation semantics.
+    # Pursuit reminders are durable in-product facts. Delivery adapters consume those facts but do
+    # not own reminder lifecycle semantics.
     pursuit_reminder_reconcile_interval_seconds: int = 300
     pursuit_due_soon_hours: int = 48
     pursuit_overdue_escalation_hours: int = 72
     pursuit_blocked_escalation_hours: int = 24
     pursuit_review_escalation_hours: int = 48
+
+    # Stage C email adapter. Delivery is disabled by default and uses a durable PostgreSQL outbox,
+    # lease/fencing token, retry/backoff and one worker task per message. SMTP credentials remain
+    # server-only configuration and must never be exposed as NEXT_PUBLIC_* values.
+    pursuit_email_delivery_enabled: bool = False
+    pursuit_email_dispatch_interval_seconds: int = 30
+    pursuit_email_lease_seconds: int = 180
+    pursuit_email_max_attempts: int = 5
+    pursuit_email_max_backoff_seconds: int = 3_600
+    pursuit_email_dispatch_batch_size: int = 50
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_starttls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_from_email: str = ""
+    smtp_from_name: str = "中港智拓"
+    smtp_timeout_seconds: float = 20.0
+    notification_public_base_url: str = ""
 
     log_level: str = "INFO"
     request_id_header: str = "X-Request-ID"
@@ -138,6 +158,29 @@ class Settings(BaseSettings):
             raise ValueError("PURSUIT_BLOCKED_ESCALATION_HOURS must be between 1 and 2160")
         if not 1 <= self.pursuit_review_escalation_hours <= 2160:
             raise ValueError("PURSUIT_REVIEW_ESCALATION_HOURS must be between 1 and 2160")
+        if self.pursuit_email_dispatch_interval_seconds < 10:
+            raise ValueError("PURSUIT_EMAIL_DISPATCH_INTERVAL_SECONDS must be at least 10")
+        if self.pursuit_email_lease_seconds <= self.celery_task_time_limit_seconds:
+            raise ValueError("PURSUIT_EMAIL_LEASE_SECONDS must exceed CELERY_TASK_TIME_LIMIT_SECONDS")
+        if not 1 <= self.pursuit_email_max_attempts <= 20:
+            raise ValueError("PURSUIT_EMAIL_MAX_ATTEMPTS must be between 1 and 20")
+        if self.pursuit_email_max_backoff_seconds < self.pursuit_email_dispatch_interval_seconds:
+            raise ValueError("PURSUIT_EMAIL_MAX_BACKOFF_SECONDS must not be below dispatch interval")
+        if not 1 <= self.pursuit_email_dispatch_batch_size <= 500:
+            raise ValueError("PURSUIT_EMAIL_DISPATCH_BATCH_SIZE must be between 1 and 500")
+        if not 1 <= self.smtp_port <= 65535:
+            raise ValueError("SMTP_PORT must be between 1 and 65535")
+        if not 1 <= self.smtp_timeout_seconds <= 120:
+            raise ValueError("SMTP_TIMEOUT_SECONDS must be between 1 and 120")
+        if self.smtp_use_ssl and self.smtp_starttls:
+            raise ValueError("SMTP_USE_SSL and SMTP_STARTTLS cannot both be true")
+        if self.smtp_username and not self.smtp_password:
+            raise ValueError("SMTP_USERNAME requires SMTP_PASSWORD")
+        if self.pursuit_email_delivery_enabled:
+            if not self.smtp_host.strip():
+                raise ValueError("email delivery requires SMTP_HOST")
+            if not self.smtp_from_email.strip() or "@" not in self.smtp_from_email:
+                raise ValueError("email delivery requires a valid SMTP_FROM_EMAIL")
 
         if self.app_env == "production":
             if self.data_backend != "database":
@@ -180,6 +223,13 @@ class Settings(BaseSettings):
                 self.document_store_s3_endpoint_url
             ):
                 raise ValueError("production custom S3 endpoint must use HTTPS")
+            if self.pursuit_email_delivery_enabled:
+                if not (self.smtp_starttls or self.smtp_use_ssl):
+                    raise ValueError("production email delivery requires TLS")
+                if self.notification_public_base_url and not self._is_https_url(
+                    self.notification_public_base_url
+                ):
+                    raise ValueError("production NOTIFICATION_PUBLIC_BASE_URL must use HTTPS")
         return self
 
     @property
