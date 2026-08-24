@@ -14,6 +14,11 @@ from .models import DiscoverRequest, SourceIngestRequest
 from .radar import BatchScanRequest, batch_scan
 from .repository import get_opportunity
 from .source_archive import SourceFetchRequest, fetch_and_archive_source
+from .source_monitoring import (
+    claim_due_subscriptions,
+    release_dispatch_claim,
+    scan_subscription,
+)
 from .strategy import get_strategy
 from .strategy_ai import generate_strategy, red_team
 from .tracked_task import TrackedTask
@@ -48,6 +53,58 @@ def reconcile_stuck_jobs_task() -> dict:
         "reconciled": reconciled,
         "stale_queued": stale_queued,
     }
+
+
+@celery_app.task(name="zhituo.sources.dispatch_due_scans")
+def dispatch_due_source_scans_task() -> dict:
+    with SessionLocal() as control_session:
+        organization_ids = control_session.scalars(
+            select(OrganizationRecord.id).where(OrganizationRecord.is_active.is_(True))
+        ).all()
+
+    claimed = 0
+    dispatched = 0
+    dispatch_failures: list[dict] = []
+    for organization_id in organization_ids:
+        with _tenant_session(organization_id) as session:
+            subscription_ids = claim_due_subscriptions(session)
+        claimed += len(subscription_ids)
+        for subscription_id in subscription_ids:
+            try:
+                source_subscription_scan_task.apply_async(
+                    args=(subscription_id, organization_id, False),
+                    headers={"organization_id": organization_id},
+                )
+                dispatched += 1
+            except Exception as exc:
+                with _tenant_session(organization_id) as session:
+                    release_dispatch_claim(session, subscription_id, str(exc))
+                dispatch_failures.append(
+                    {"subscription_id": subscription_id, "error": str(exc)[:500]}
+                )
+    return {
+        "organizations_scanned": len(organization_ids),
+        "claimed": claimed,
+        "dispatched": dispatched,
+        "dispatch_failures": dispatch_failures,
+    }
+
+
+@celery_app.task(name="zhituo.sources.scan_subscription")
+def source_subscription_scan_task(
+    subscription_id: str,
+    organization_id: str,
+    manual: bool = False,
+) -> dict:
+    with _tenant_session(organization_id) as session:
+        result = asyncio.run(
+            scan_subscription(
+                session,
+                subscription_id,
+                manual=manual,
+            )
+        )
+        return _json(result)
 
 
 @celery_app.task(bind=True, base=TrackedTask, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.discovery.scan")
