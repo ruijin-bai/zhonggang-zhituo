@@ -17,6 +17,7 @@
 → 机会研判
 → 形成策略
 → 编排行动
+→ 主动提醒 / 升级
 → 记录结果
 → 复盘学习
 ```
@@ -127,13 +128,13 @@
 - [x] Candidate 审核业务幂等 + Audit
 - [x] Web check / build / production image / full `zhituo/ci-gate`
 
-Stage A 已于 `eddc8aaf` 合入 `main`。首页和经营情报工作台已经从比赛入口转为日常经营入口。
+Stage A 已于 `eddc8aaf` 合入 `main`。
 
-## 6. 当前主战场：Stage B — Pursuit Orchestration
+## 6. Stage B — Pursuit Orchestration（已完成）
 
 目标：从“告诉经营人员应该做什么”升级为“推动组织把事情做完”。
 
-### B1 — 协同与决策内核（已完成）
+### B1 — 协同与决策内核
 
 - [x] `PursuitWorkspace`
 - [x] Work Item 绑定真实 `Membership`
@@ -149,16 +150,7 @@ Stage A 已于 `eddc8aaf` 合入 `main`。首页和经营情报工作台已经�
 
 B1 已于 `260eaacd` 合入 `main`。
 
-兼容原则：
-
-- Stage B 的 `PursuitWorkItem` 是新的权威协同事实；
-- 旧 `pursuit_actions` 仅为 Tracking v1 兼容对象；
-- 旧写入单向同步到新模型，防止新增历史入口造成数据丢失；
-- 旧字符串负责人只保存为 `legacy_owner_text`，绝不自动伪装成真实用户；
-- 新 Stage B 写入不反向制造旧 Action；
-- Web 已切换到 `/pursuit`，Tracking v1 仅保留兼容入口，后续再做 Contract 清理。
-
-### B2 — 协同工作台（已完成）
+### B2 — 协同工作台
 
 - [x] My Work Web
 - [x] Team Work Web
@@ -171,36 +163,56 @@ B1 已于 `260eaacd` 合入 `main`。
 
 B2 已于 `5f4db141` 合入 `main`。
 
-### B3 — 提醒与升级（当前分支）
+### B3 — 提醒与升级
 
-- [x] Durable `PursuitReminder` ledger（本分支实现，待 CI）
-- [x] due-soon / overdue / blocked / Gate / Review / Workspace review policy（本分支实现，待 CI）
-- [x] `blocked_since` 精确阻塞时长（本分支实现，待 CI）
-- [x] Reminder dedup / acknowledge / auto-resolve / recurrence count（本分支实现，待 CI）
-- [x] overdue / blocked / pending-review escalation to Workspace Lead（本分支实现，待 CI）
-- [x] Beat dispatcher → per-tenant Worker reconciliation（本分支实现，待 CI）
-- [x] My Work Reminder Inbox + 受控“已知悉”（本分支实现，待 CI）
-- [x] Critical / Escalated Reminder → Daily Brief（本分支实现，待 CI）
-- [x] PostgreSQL RLS + runtime grants + lifecycle/idempotency tests（本分支实现，待 CI）
+- [x] Durable `PursuitReminder` ledger
+- [x] due-soon / overdue / blocked / Gate / Review / Workspace review policy
+- [x] `blocked_since` 精确阻塞时长
+- [x] Reminder dedup / acknowledge / auto-resolve / recurrence count
+- [x] overdue / blocked / pending-review escalation to Workspace Lead
+- [x] Beat dispatcher → per-tenant Worker reconciliation
+- [x] My Work Reminder Inbox + 受控“已知悉”
+- [x] Critical / Escalated Reminder → Daily Brief
+- [x] PostgreSQL RLS + runtime grants + lifecycle/idempotency tests
 
-外部邮件 / Teams / 企业微信 / OA **不作为 B3 的事实模型组成部分**。B3 先把“为何提醒、提醒谁、何时升级、是否知悉、何时解除”沉淀为系统事实；Stage C 再选择一个企业通知渠道作为 Delivery Adapter，避免业务规则绑死在外部工具上。
+B3 已于 `bbd12b0f` 合入 `main`。到此 Stage B 完整形成“责任—行动—依赖—复核—决策—提醒—升级”的经营执行闭环。
 
-Stage B 完成标准：
+兼容原则：
 
-> 一个 Opportunity 从正式确认入池到决策、行动、复核和退出/继续投入，全部能够回答“谁、何时、做了什么、依据什么、结果如何”；执行异常能够被系统主动识别、提醒、升级并在解除后自动关闭。
+- `PursuitWorkItem` 是权威协同事实；旧 `pursuit_actions` 仅为 Tracking v1 兼容对象；
+- 旧字符串负责人只保存为 `legacy_owner_text`，绝不自动伪装成真实用户；
+- Web 主路径已切换到 `/pursuit`；后续按 Expand-Migrate-Contract 清理 Tracking v1。
 
-## 7. Stage C — 企业连接与真实数据
+## 7. 当前主战场：Stage C — 企业连接与真实数据
 
-按最小业务价值优先连接，不以连接器数量为目标：
+目标：不重造企业已有系统，而是让智拓与真实组织身份、通知渠道、项目主数据和历史经营结果连接起来。
 
-1. [ ] 企业身份目录深化；
-2. [ ] 邮件 / Teams / 企业微信 / OA 通知 Delivery Adapter 之一；
-3. [ ] CRM / 市场项目主数据；
+### C1 — Reminder Email Delivery Adapter（当前分支）
+
+- [x] Durable `PursuitReminderDelivery` outbox（本分支实现，待 CI）
+- [x] Reminder occurrence / escalation / recipient / email snapshot 确定性 delivery key（本分支实现，待 CI）
+- [x] Beat staging + claim + per-message Worker（本分支实现，待 CI）
+- [x] lease / fencing token / SKIP LOCKED（本分支实现，待 CI）
+- [x] exponential retry / failed ledger / manager manual retry（本分支实现，待 CI）
+- [x] stale delivery cancellation：Reminder 已知悉/解除、目标或邮箱变化时不发送旧通知（本分支实现，待 CI）
+- [x] SMTP STARTTLS / SSL Adapter + server-only secrets（本分支实现，待 CI）
+- [x] deterministic Message-ID + plain/HTML body + optional Pursuit deep link（本分支实现，待 CI）
+- [x] manager delivery health API + manual retry business idempotency / Audit（本分支实现，待 CI）
+- [x] PostgreSQL RLS + runtime grants + outbox tests（本分支实现，待 CI）
+
+投递语义：**durable at-least-once**。SMTP 无法提供端到端 exactly-once；系统通过持久化 outbox、确定性 Message-ID、租约/fencing 和发送账本降低重复风险，并显式记录发送结果，不宣传不存在的 exactly-once 保证。
+
+### Stage C 后续顺序
+
+1. [ ] 企业身份目录深化 / Membership provisioning；
+2. [x] 邮件通知 Delivery Adapter（当前分支实现，待 CI）；
+3. [ ] CRM / 市场项目主数据同步；
 4. [ ] 历史投标 / 中标 / 失标数据；
-5. [ ] 企业知识库；
-6. [ ] OCR / 高价值采购平台/API Connector。
+5. [ ] 企业知识库连接；
+6. [ ] OCR / 高价值采购平台/API Connector；
+7. [ ] 视真实企业环境再增加 Teams / 企业微信 / OA Delivery Adapter。
 
-原则：外部系统继续作为其权威事实源，智拓只保存智能上下文、映射、审计和必要快照。
+原则：外部系统继续作为其权威事实源，智拓只保存智能上下文、映射、审计、必要快照和可靠投递状态。
 
 ## 8. Stage D — Outcome / Learning Loop
 
@@ -229,9 +241,9 @@ Stage B 完成标准：
 - [ ] Canary / rolling / rollback gate
 - [ ] PostgreSQL / Redis HA（业务证明需要后）
 
-## 10. 暂缓事项
+## 10. 当前仍暂缓的事项
 
-在 Stage B 完成前，不把以下内容作为主线优先级：
+以下内容不作为当前主线优先级：
 
 - 通用 Chat/RAG 壳；
 - 大规模 Vector DB；
