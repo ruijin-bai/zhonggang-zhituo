@@ -10,6 +10,7 @@ from .candidate_api import router as candidate_router
 from .db import AuditLogRecord, get_db
 from .entity_api import router as entity_router
 from .health import router as health_router
+from .pursuit_api import router as pursuit_router
 from .search_api import router as search_router
 from .security import Principal, get_principal, require_role
 from .source_monitoring_api import router as source_monitoring_router
@@ -21,6 +22,7 @@ router.include_router(candidate_router)
 router.include_router(entity_router)
 router.include_router(search_router)
 router.include_router(briefing_router)
+router.include_router(pursuit_router)
 
 
 class MeResponse(BaseModel):
