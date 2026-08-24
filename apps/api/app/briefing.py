@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from .db import (
@@ -17,6 +17,7 @@ from .db import (
     utc_now,
 )
 from .pursuit_db import PursuitWorkItemRecord
+from .pursuit_reminder_db import PursuitReminderRecord
 
 
 ACTIVE_WORK_STATUSES = ("open", "in_progress", "blocked")
@@ -56,7 +57,8 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
 
     Pursuit Work Item is the canonical Stage B work model. Legacy Tracking v1 actions remain a
     temporary read-only fallback only when they have not been migrated/mirrored into a Work Item.
-    This keeps the morning brief complete without double-counting the same action.
+    Durable Pursuit Reminders are added only for critical/escalated exceptions so the Daily Brief
+    does not duplicate every normal due-soon task already visible in My Work.
     """
 
     now = utc_now()
@@ -85,6 +87,28 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
         select(func.count())
         .select_from(PursuitAlertRecord)
         .where(PursuitAlertRecord.status == "open")
+    ) or 0
+
+    active_reminder_count = session.scalar(
+        select(func.count())
+        .select_from(PursuitReminderRecord)
+        .where(PursuitReminderRecord.status != "resolved")
+    ) or 0
+    critical_reminder_count = session.scalar(
+        select(func.count())
+        .select_from(PursuitReminderRecord)
+        .where(
+            PursuitReminderRecord.status != "resolved",
+            PursuitReminderRecord.severity == "critical",
+        )
+    ) or 0
+    escalated_reminder_count = session.scalar(
+        select(func.count())
+        .select_from(PursuitReminderRecord)
+        .where(
+            PursuitReminderRecord.status != "resolved",
+            PursuitReminderRecord.escalation_level > 0,
+        )
     ) or 0
 
     canonical_overdue_count = session.scalar(
@@ -168,6 +192,21 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
         .order_by(PursuitActionRecord.due_at.asc())
         .limit(limit)
     ).all()
+    reminder_rows = session.scalars(
+        select(PursuitReminderRecord)
+        .where(
+            PursuitReminderRecord.status != "resolved",
+            or_(
+                PursuitReminderRecord.severity == "critical",
+                PursuitReminderRecord.escalation_level > 0,
+            ),
+        )
+        .order_by(
+            PursuitReminderRecord.escalation_level.desc(),
+            PursuitReminderRecord.first_triggered_at.asc(),
+        )
+        .limit(limit)
+    ).all()
     alert_rows = session.scalars(
         select(PursuitAlertRecord)
         .where(PursuitAlertRecord.status == "open")
@@ -195,6 +234,7 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
         *(item.opportunity_id for item in event_rows),
         *(item.opportunity_id for item in canonical_overdue_rows),
         *(item.opportunity_id for item in legacy_overdue_rows),
+        *(item.opportunity_id for item in reminder_rows),
         *(item.opportunity_id for item in alert_rows),
         *(item.opportunity_id for item in review_rows),
     }
@@ -204,7 +244,13 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
         for item in canonical_overdue_rows
         if item.assignee_membership_id is not None
     }
-    assignees = _membership_names(session, assignee_ids)
+    reminder_member_ids = {
+        member_id
+        for row in reminder_rows
+        for member_id in (row.recipient_membership_id, row.escalated_to_membership_id)
+        if member_id is not None
+    }
+    assignees = _membership_names(session, assignee_ids | reminder_member_ids)
 
     recent_events = [
         {
@@ -219,6 +265,27 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
     ]
 
     attention: list[dict] = []
+    attention.extend(
+        {
+            "kind": "pursuit_reminder",
+            "severity": row.severity,
+            "resource_id": row.id,
+            "opportunity_id": row.opportunity_id,
+            "title": row.title,
+            "subtitle": titles.get(row.opportunity_id, row.opportunity_id),
+            "message": row.message,
+            "recipient": assignees.get(row.recipient_membership_id, "未解析成员"),
+            "escalated_to": (
+                assignees.get(row.escalated_to_membership_id)
+                if row.escalated_to_membership_id is not None
+                else None
+            ),
+            "escalation_level": row.escalation_level,
+            "status": row.status,
+            "first_triggered_at": row.first_triggered_at.isoformat(),
+        }
+        for row in reminder_rows
+    )
     attention.extend(
         {
             "kind": "overdue_work_item",
@@ -306,11 +373,14 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
             "overdue_actions": overdue_action_count,
             "due_soon_actions": due_soon_action_count,
             "review_due": review_due_count,
+            "active_reminders": active_reminder_count,
+            "critical_reminders": critical_reminder_count,
+            "escalated_reminders": escalated_reminder_count,
         },
         "recent_events": recent_events,
         "attention": attention,
         "note": (
             "Daily Brief 优先聚合 Stage B Pursuit Work Item，并仅将尚未迁移的 Tracking v1 Action "
-            "作为兼容回退；同一历史行动不会重复计数。"
+            "作为兼容回退；Pursuit Reminder 只将 Critical / Escalated 例外提升到晨报关注区。"
         ),
     }
