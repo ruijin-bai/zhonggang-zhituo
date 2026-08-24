@@ -85,7 +85,17 @@ jobs:
       - name: Install locked API dependencies
         run: uv sync --locked --extra dev
       - name: Lint Python with Ruff
-        run: uv run ruff check app tests
+        run: |
+          set -o pipefail
+          uv run ruff check app tests 2>&1 | tee /tmp/ruff-report.txt
+      - name: Upload Ruff diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-diagnostics-${{ github.sha }}
+          path: /tmp/ruff-report.txt
+          if-no-files-found: error
+          retention-days: 7
       - name: Compile Python sources
         run: uv run python -m compileall -q app
       - name: Validate operations shell scripts
