@@ -126,7 +126,7 @@
 
 这些对象目前能够演示经营闭环，但还没有完成真实团队协同所需的用户、审批、依赖、提醒、升级和 Portfolio 语义。
 
-## 6. 当前主线：Stage A — 经营工作台产品化
+## 6. Stage A — 经营工作台产品化
 
 目标：把已经成熟的后端能力变成真实市场人员每天可以使用的入口。
 
@@ -139,10 +139,10 @@
 - [x] Opportunity ↔ Knowledge View 连续导航
 - [x] 新北极星导航与产品文案
 - [x] Web CI / production image 验证并合入 main
-- [x] Candidate confirm / reject 受控 UI（本分支实现，待 CI 合并）
-- [x] attach additional evidence UI（本分支实现，待 CI 合并）
-- [ ] Entity 专属浏览页
-- [ ] 首页“今天发生什么 / 我需要处理什么”摘要
+- [x] Candidate confirm / reject 受控 UI
+- [x] attach additional evidence UI
+- [x] Entity 专属浏览页（本分支实现，待 CI 合并）
+- [x] 首页“今天发生什么 / 我需要处理什么” Daily Brief（本分支实现，待 CI 合并）
 
 Candidate 审核设计原则：
 
@@ -154,6 +154,14 @@ Candidate 审核设计原则：
 - confirm 入正式机会池前重新从 DocumentStore 读取并校验规范原文；
 - 疑似已有 Opportunity 只允许经营人员人工选择“作为补充证据挂接”，机器不擅自合并正式项目。
 
+Daily Brief 设计原则：
+
+- 直接聚合现有 Candidate / Opportunity Event / Action / Alert / Watch 事实；
+- 不新建第二套待办状态表；
+- 所有查询继续受 ORM Tenant Scope + PostgreSQL RLS；
+- 首页不再以固定比赛英雄案例作为首要入口；
+- 实时晨报失败时显式失败，不用 Demo 数据伪装实时待办。
+
 Stage A 完成标准：
 
 1. 核心情报查询路径不超过 3 次点击；
@@ -161,6 +169,8 @@ Stage A 完成标准：
 3. 搜索结果可追溯到 Opportunity / Evidence / Source；
 4. Candidate 审核动作受 RBAC、幂等和审计保护；
 5. Web check / build / production image / full ci-gate 全绿。
+
+> 本分支通过 `zhituo/ci-gate` 并合入后，Stage A 正式封口。
 
 ## 7. 下一主战场：Stage B — Pursuit Orchestration
 
