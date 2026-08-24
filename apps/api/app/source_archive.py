@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from .candidate_pipeline import ensure_candidate_processing
 from .connectors import ConnectorResult, connector_kinds, fetch_documents
 from .db import utc_now
 from .document_store import DocumentStore, build_document_store
@@ -235,6 +236,10 @@ def archive_connector_result(
         )
         if created:
             documents_created += 1
+            # Candidate work is inserted in the same database transaction as the normalized
+            # SourceDocument. Redis/Celery can be unavailable at ingestion time without losing
+            # the future opportunity-detection task.
+            ensure_candidate_processing(session, record.id)
         archived_documents.append(
             ArchivedDocument(
                 id=record.id,
