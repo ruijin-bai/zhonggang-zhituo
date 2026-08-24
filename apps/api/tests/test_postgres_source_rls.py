@@ -67,6 +67,8 @@ def test_postgres_rls_blocks_cross_tenant_source_archive_reads() -> None:
     password = f"SourceRls-{suffix}-Password-123!"
     fetch_a, document_a = _source_records(suffix=suffix, organization_id=org_a, marker="a")
     fetch_b, document_b = _source_records(suffix=suffix, organization_id=org_b, marker="b")
+    fetch_a_id, fetch_b_id = fetch_a.id, fetch_b.id
+    document_a_id, document_b_id = document_a.id, document_b.id
 
     admin_engine = create_engine(settings.database_url, pool_pre_ping=True)
     runtime_engine = None
@@ -102,14 +104,14 @@ def test_postgres_rls_blocks_cross_tenant_source_archive_reads() -> None:
             )
             fetch_ids = connection.execute(
                 text("SELECT id FROM source_fetches WHERE id IN (:a, :b) ORDER BY id"),
-                {"a": fetch_a.id, "b": fetch_b.id},
+                {"a": fetch_a_id, "b": fetch_b_id},
             ).scalars().all()
             document_ids = connection.execute(
                 text("SELECT id FROM source_documents WHERE id IN (:a, :b) ORDER BY id"),
-                {"a": document_a.id, "b": document_b.id},
+                {"a": document_a_id, "b": document_b_id},
             ).scalars().all()
-            assert fetch_ids == [fetch_a.id]
-            assert document_ids == [document_a.id]
+            assert fetch_ids == [fetch_a_id]
+            assert document_ids == [document_a_id]
 
             connection.execute(
                 text("SELECT set_config('app.current_organization_id', :org, false)"),
@@ -117,14 +119,14 @@ def test_postgres_rls_blocks_cross_tenant_source_archive_reads() -> None:
             )
             fetch_ids = connection.execute(
                 text("SELECT id FROM source_fetches WHERE id IN (:a, :b) ORDER BY id"),
-                {"a": fetch_a.id, "b": fetch_b.id},
+                {"a": fetch_a_id, "b": fetch_b_id},
             ).scalars().all()
             document_ids = connection.execute(
                 text("SELECT id FROM source_documents WHERE id IN (:a, :b) ORDER BY id"),
-                {"a": document_a.id, "b": document_b.id},
+                {"a": document_a_id, "b": document_b_id},
             ).scalars().all()
-            assert fetch_ids == [fetch_b.id]
-            assert document_ids == [document_b.id]
+            assert fetch_ids == [fetch_b_id]
+            assert document_ids == [document_b_id]
     finally:
         if runtime_engine is not None:
             runtime_engine.dispose()
@@ -134,11 +136,11 @@ def test_postgres_rls_blocks_cross_tenant_source_archive_reads() -> None:
                 connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
             connection.execute(
                 text("DELETE FROM source_documents WHERE id IN (:a, :b)"),
-                {"a": document_a.id, "b": document_b.id},
+                {"a": document_a_id, "b": document_b_id},
             )
             connection.execute(
                 text("DELETE FROM source_fetches WHERE id IN (:a, :b)"),
-                {"a": fetch_a.id, "b": fetch_b.id},
+                {"a": fetch_a_id, "b": fetch_b_id},
             )
             connection.execute(
                 text("DELETE FROM organizations WHERE id IN (:a, :b)"),
