@@ -1,0 +1,69 @@
+name: zhituo-production
+
+x-api-runtime: &api-runtime
+  image: ${ZHITUO_API_IMAGE:?Set ZHITUO_API_IMAGE to an immutable image digest or tag}
+  env_file:
+    - ${ZHITUO_API_ENV_FILE:?Set ZHITUO_API_ENV_FILE}
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    - backend
+
+services:
+  api:
+    <<: *api-runtime
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    expose:
+      - "8000"
+
+  worker:
+    <<: *api-runtime
+    command:
+      - celery
+      - -A
+      - app.celery_app.celery_app
+      - worker
+      - --loglevel=INFO
+      - --concurrency=${CELERY_WORKER_CONCURRENCY:-2}
+
+  beat:
+    <<: *api-runtime
+    command:
+      - celery
+      - -A
+      - app.celery_app.celery_app
+      - beat
+      - --loglevel=INFO
+      - --schedule=/tmp/celerybeat-schedule
+
+  web:
+    image: ${ZHITUO_WEB_IMAGE:?Set ZHITUO_WEB_IMAGE to an immutable image digest or tag}
+    env_file:
+      - ${ZHITUO_WEB_ENV_FILE:?Set ZHITUO_WEB_ENV_FILE}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    expose:
+      - "3000"
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      api:
+        condition: service_started
+
+networks:
+  frontend:
+  backend:
+    internal: true
