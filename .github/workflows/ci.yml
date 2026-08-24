@@ -126,8 +126,20 @@ jobs:
           test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_backup','pursuit_work_items','INSERT')")" = "f"
       - name: Verify Redis connectivity
         run: uv run python -c "from redis import Redis; assert Redis.from_url('redis://127.0.0.1:6379/0').ping()"
-      - name: Run unit, integration and PostgreSQL RLS tests
-        run: uv run pytest -q
+      - name: Run unit, integration and PostgreSQL RLS tests with coverage
+        run: >-
+          uv run pytest -q
+          --cov=app
+          --cov-report=term-missing
+          --cov-report=json:/tmp/coverage.json
+      - name: Upload API coverage baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage-${{ github.sha }}
+          path: /tmp/coverage.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Verify repeatable demo seed and CLI
         run: |
           uv run zhituo-api reset-demo
