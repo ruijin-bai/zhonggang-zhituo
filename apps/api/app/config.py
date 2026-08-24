@@ -58,6 +58,14 @@ class Settings(BaseSettings):
     candidate_dispatch_batch_size: int = 50
     candidate_draft_duplicate_threshold: float = 0.88
 
+    # Pursuit reminders are durable in-product facts. External mail/Teams/WeCom delivery can be
+    # attached later without changing the reminder or escalation semantics.
+    pursuit_reminder_reconcile_interval_seconds: int = 300
+    pursuit_due_soon_hours: int = 48
+    pursuit_overdue_escalation_hours: int = 72
+    pursuit_blocked_escalation_hours: int = 24
+    pursuit_review_escalation_hours: int = 48
+
     log_level: str = "INFO"
     request_id_header: str = "X-Request-ID"
     correlation_id_header: str = "X-Correlation-ID"
@@ -120,6 +128,16 @@ class Settings(BaseSettings):
             raise ValueError("CANDIDATE_DISPATCH_BATCH_SIZE must be between 1 and 500")
         if not 0.75 <= self.candidate_draft_duplicate_threshold <= 0.99:
             raise ValueError("CANDIDATE_DRAFT_DUPLICATE_THRESHOLD must be between 0.75 and 0.99")
+        if self.pursuit_reminder_reconcile_interval_seconds < 30:
+            raise ValueError("PURSUIT_REMINDER_RECONCILE_INTERVAL_SECONDS must be at least 30")
+        if not 1 <= self.pursuit_due_soon_hours <= 720:
+            raise ValueError("PURSUIT_DUE_SOON_HOURS must be between 1 and 720")
+        if not 1 <= self.pursuit_overdue_escalation_hours <= 2160:
+            raise ValueError("PURSUIT_OVERDUE_ESCALATION_HOURS must be between 1 and 2160")
+        if not 1 <= self.pursuit_blocked_escalation_hours <= 2160:
+            raise ValueError("PURSUIT_BLOCKED_ESCALATION_HOURS must be between 1 and 2160")
+        if not 1 <= self.pursuit_review_escalation_hours <= 2160:
+            raise ValueError("PURSUIT_REVIEW_ESCALATION_HOURS must be between 1 and 2160")
 
         if self.app_env == "production":
             if self.data_backend != "database":
