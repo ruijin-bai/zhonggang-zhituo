@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from .briefing_api import router as briefing_router
 from .candidate_api import router as candidate_router
 from .db import AuditLogRecord, get_db
+from .directory_api import router as directory_router
 from .entity_api import router as entity_router
 from .health import router as health_router
 from .pursuit_api import router as pursuit_router
@@ -27,6 +28,7 @@ router.include_router(briefing_router)
 router.include_router(pursuit_router)
 router.include_router(pursuit_reminder_router)
 router.include_router(pursuit_delivery_router)
+router.include_router(directory_router)
 
 
 class MeResponse(BaseModel):
