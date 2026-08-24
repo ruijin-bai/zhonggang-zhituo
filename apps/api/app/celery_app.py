@@ -25,4 +25,10 @@ celery_app.conf.update(
     task_soft_time_limit=settings.celery_task_soft_time_limit_seconds,
     task_time_limit=settings.celery_task_time_limit_seconds,
     broker_connection_retry_on_startup=True,
+    beat_schedule={
+        "reconcile-stuck-background-jobs": {
+            "task": "zhituo.maintenance.reconcile_stuck_jobs",
+            "schedule": 60.0,
+        }
+    },
 )
