@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .candidate_api import router as candidate_router
 from .db import AuditLogRecord, get_db
 from .health import router as health_router
 from .security import Principal, get_principal, require_role
@@ -13,6 +14,7 @@ from .source_monitoring_api import router as source_monitoring_router
 router = APIRouter(prefix="/api", tags=["identity"])
 router.include_router(health_router)
 router.include_router(source_monitoring_router)
+router.include_router(candidate_router)
 
 
 class MeResponse(BaseModel):
