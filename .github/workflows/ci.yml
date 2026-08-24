@@ -147,9 +147,44 @@ jobs:
       - name: Build Web production image
         run: docker build --pull -t zhituo-web:ci apps/web
 
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Audit Python runtime dependencies and generate CycloneDX SBOM
+        run: |
+          python -m pip install --upgrade pip
+          pip install ./apps/api
+          pip install 'pip-audit>=2.9,<3'
+          pip-audit --local --format cyclonedx-json --output api-sbom.cdx.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Audit Web production dependencies
+        working-directory: apps/web
+        run: |
+          npm install
+          npm audit --omit=dev --audit-level=high
+      - name: Generate Web CycloneDX SBOM
+        working-directory: apps/web
+        run: npm sbom --sbom-format cyclonedx > ../../web-sbom.cdx.json
+      - name: Upload software bills of materials
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zhituo-sbom-${{ github.sha }}
+          path: |
+            api-sbom.cdx.json
+            web-sbom.cdx.json
+          if-no-files-found: warn
+          retention-days: 30
+
   ci-gate:
     if: always()
-    needs: [web, api, containers]
+    needs: [web, api, containers, security]
     runs-on: ubuntu-latest
     steps:
       - name: Publish CI gate status
@@ -158,16 +193,17 @@ jobs:
           WEB_RESULT: ${{ needs.web.result }}
           API_RESULT: ${{ needs.api.result }}
           CONTAINERS_RESULT: ${{ needs.containers.result }}
+          SECURITY_RESULT: ${{ needs.security.result }}
           SHA: ${{ github.sha }}
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
         run: |
-          if [ "$WEB_RESULT" = "success" ] && [ "$API_RESULT" = "success" ] && [ "$CONTAINERS_RESULT" = "success" ]; then
+          if [ "$WEB_RESULT" = "success" ] && [ "$API_RESULT" = "success" ] && [ "$CONTAINERS_RESULT" = "success" ] && [ "$SECURITY_RESULT" = "success" ]; then
             STATE=success
-            DESCRIPTION='web, api and containers passed'
+            DESCRIPTION='web, api, containers and security passed'
           else
             STATE=failure
-            DESCRIPTION="web=$WEB_RESULT api=$API_RESULT containers=$CONTAINERS_RESULT"
+            DESCRIPTION="web=$WEB_RESULT api=$API_RESULT containers=$CONTAINERS_RESULT security=$SECURITY_RESULT"
           fi
           curl --fail-with-body -sS \
             -X POST \
