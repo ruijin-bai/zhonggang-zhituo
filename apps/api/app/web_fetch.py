@@ -158,8 +158,8 @@ async def fetch_public_resource(
                     current = validate_public_url(urljoin(current, location))
                     continue
 
-                etag = response.headers.get("etag") or if_none_match
-                last_modified = response.headers.get("last-modified") or if_modified_since
+                response_etag = response.headers.get("etag")
+                response_last_modified = response.headers.get("last-modified")
                 if response.status_code == 304:
                     return PublicResource(
                         url=current,
@@ -167,8 +167,8 @@ async def fetch_public_resource(
                         body=b"",
                         encoding="utf-8",
                         status_code=304,
-                        etag=etag,
-                        last_modified=last_modified,
+                        etag=response_etag or if_none_match,
+                        last_modified=response_last_modified or if_modified_since,
                     )
 
                 response.raise_for_status()
@@ -186,8 +186,8 @@ async def fetch_public_resource(
                     body=bytes(body),
                     encoding=response.encoding or "utf-8",
                     status_code=response.status_code,
-                    etag=etag,
-                    last_modified=last_modified,
+                    etag=response_etag,
+                    last_modified=response_last_modified,
                 )
 
     raise ValueError("网页重定向次数过多")
