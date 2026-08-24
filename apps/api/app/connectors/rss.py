@@ -5,7 +5,7 @@ from email.utils import parsedate_to_datetime
 from hashlib import sha256
 from xml.etree import ElementTree
 
-from .base import ConnectorResult, SourceDocument, build_document
+from .base import ConnectorFetchOutcome, ConnectorResult, SourceDocument, build_document
 from ..web_fetch import PublicResource, fetch_public_resource, html_to_text
 
 MAX_FEED_BYTES = 5_000_000
@@ -31,8 +31,6 @@ def _child_text(element: ElementTree.Element, *names: str) -> str:
 
 
 def _feed_container(root: ElementTree.Element) -> ElementTree.Element:
-    """Return the element that owns feed metadata and entries for RSS or Atom."""
-
     if _local_name(root.tag) == "rss":
         for child in list(root):
             if _local_name(child.tag) == "channel":
@@ -82,6 +80,8 @@ def _markup_text(value: str) -> str:
 
 
 def parse_feed_resource(resource: PublicResource) -> list[SourceDocument]:
+    if resource.not_modified:
+        raise ValueError("304 Not Modified 响应没有可解析 Feed 正文")
     if resource.content_type and resource.content_type not in RSS_CONTENT_TYPES:
         prefix = resource.body.lstrip()[:200].lower()
         if not (prefix.startswith(b"<?xml") or b"<rss" in prefix or b"<feed" in prefix):
@@ -138,6 +138,18 @@ class RssConnector:
     kind = "rss"
 
     async def fetch(self, url: str) -> ConnectorResult:
+        outcome = await self.fetch_conditional(url)
+        if outcome.result is None:
+            raise RuntimeError("unconditional RSS fetch unexpectedly returned not-modified")
+        return outcome.result
+
+    async def fetch_conditional(
+        self,
+        url: str,
+        *,
+        if_none_match: str | None = None,
+        if_modified_since: str | None = None,
+    ) -> ConnectorFetchOutcome:
         resource = await fetch_public_resource(
             url,
             max_bytes=MAX_FEED_BYTES,
@@ -145,10 +157,21 @@ class RssConnector:
                 "application/rss+xml,application/atom+xml,application/xml,text/xml;q=0.9,"
                 "*/*;q=0.1"
             ),
+            if_none_match=if_none_match,
+            if_modified_since=if_modified_since,
         )
+        if resource.not_modified:
+            return ConnectorFetchOutcome(
+                connector=self.kind,
+                source_url=resource.url,
+                not_modified=True,
+                etag=resource.etag,
+                last_modified=resource.last_modified,
+            )
+
         documents = parse_feed_resource(resource)
         raw_digest = sha256(resource.body).hexdigest()
-        return ConnectorResult(
+        result = ConnectorResult(
             connector=self.kind,
             source_url=resource.url,
             source_content_type=resource.content_type or "application/xml",
@@ -156,4 +179,11 @@ class RssConnector:
             source_raw_size_bytes=len(resource.body),
             documents=documents,
             raw_objects={raw_digest: resource.body},
+        )
+        return ConnectorFetchOutcome(
+            connector=self.kind,
+            source_url=resource.url,
+            etag=resource.etag,
+            last_modified=resource.last_modified,
+            result=result,
         )
