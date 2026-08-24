@@ -50,7 +50,9 @@ def upgrade() -> None:
         sa.Column("raw_size_bytes", sa.Integer(), nullable=False),
         sa.Column("raw_object_key", sa.String(length=500), nullable=False),
         sa.Column("storage_backend", sa.String(length=20), nullable=False),
-        sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("seen_count", sa.Integer(), nullable=False),
+        sa.Column("first_fetched_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("last_fetched_at", sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint(
             "organization_id",
             "connector",
@@ -63,7 +65,8 @@ def upgrade() -> None:
     op.create_index("ix_source_fetches_connector", "source_fetches", ["connector"])
     op.create_index("ix_source_fetches_source_url_hash", "source_fetches", ["source_url_hash"])
     op.create_index("ix_source_fetches_raw_sha256", "source_fetches", ["raw_sha256"])
-    op.create_index("ix_source_fetches_fetched_at", "source_fetches", ["fetched_at"])
+    op.create_index("ix_source_fetches_first_fetched_at", "source_fetches", ["first_fetched_at"])
+    op.create_index("ix_source_fetches_last_fetched_at", "source_fetches", ["last_fetched_at"])
     _enable_rls("source_fetches")
 
     op.create_table(
