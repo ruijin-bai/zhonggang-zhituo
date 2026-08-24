@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import OpportunityRecord, OrganizationRecord
 
-
 settings = get_settings()
 pytestmark = pytest.mark.skipif(
     not settings.database_url.startswith("postgresql"),

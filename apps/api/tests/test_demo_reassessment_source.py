@@ -5,7 +5,6 @@ from app.extraction import extract_facts_deterministic
 from app.models import ScoreBreakdown
 from app.scoring import apply_score_updates, calculate_score
 
-
 SOURCE = Path(__file__).resolve().parents[3] / "data" / "demo" / "hero_reassessment_source.json"
 
 

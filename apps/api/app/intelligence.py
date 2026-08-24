@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from collections import defaultdict
-from hashlib import sha256
 import re
 import unicodedata
+from collections import defaultdict
+from hashlib import sha256
 from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .db import OpportunityDraftRecord, utc_now
+from .db import utc_now
 from .intelligence_db import (
     CandidateSourceDocumentRecord,
     EntityAliasRecord,

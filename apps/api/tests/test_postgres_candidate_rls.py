@@ -11,7 +11,6 @@ from app.config import get_settings
 from app.db import OrganizationRecord, utc_now
 from app.source_db import SourceDocumentRecord, SourceFetchRecord
 
-
 settings = get_settings()
 pytestmark = pytest.mark.skipif(
     not settings.database_url.startswith("postgresql"),

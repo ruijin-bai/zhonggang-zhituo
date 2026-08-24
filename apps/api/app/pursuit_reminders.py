@@ -16,8 +16,7 @@ from .pursuit_db import (
 )
 from .pursuit_reminder_db import PursuitReminderRecord
 from .pursuit_service import principal_membership
-from .security import Principal, ROLE_LEVEL
-
+from .security import ROLE_LEVEL, Principal
 
 ACTIVE_WORK_STATUSES = {"open", "in_progress", "blocked"}
 

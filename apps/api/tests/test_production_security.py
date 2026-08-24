@@ -11,7 +11,6 @@ from app.db import Base, MembershipRecord, OrganizationRecord, UserRecord
 from app.main import app
 from app.security import _select_membership
 
-
 PROXY_SECRET = "zhituo-production-proxy-secret-32-characters-minimum"
 
 

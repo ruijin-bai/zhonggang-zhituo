@@ -5,7 +5,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.briefing import daily_brief
-from app.db import Base, OpportunityRecord, OrganizationRecord, PursuitActionRecord, set_tenant_context, utc_now
+from app.db import (
+    Base,
+    OpportunityRecord,
+    OrganizationRecord,
+    PursuitActionRecord,
+    set_tenant_context,
+    utc_now,
+)
 from app.pursuit_db import PursuitWorkItemRecord, PursuitWorkspaceRecord
 
 

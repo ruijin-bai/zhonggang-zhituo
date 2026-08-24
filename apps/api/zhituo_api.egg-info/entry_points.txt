@@ -1,0 +1,2 @@
+[console_scripts]
+zhituo-api = app.cli:main

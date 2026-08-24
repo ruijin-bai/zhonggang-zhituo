@@ -1,5 +1,5 @@
 from app.models import ScoreBreakdown
-from app.scoring import calculate_score, grade_for, decision_for
+from app.scoring import calculate_score, decision_for, grade_for
 
 
 def test_grade_boundaries():

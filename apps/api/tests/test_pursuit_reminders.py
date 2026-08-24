@@ -1,5 +1,5 @@
-from datetime import timedelta
 import uuid
+from datetime import timedelta
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -13,7 +13,6 @@ from app.db import (
     set_tenant_context,
     utc_now,
 )
-from app.pursuit_db import PursuitWorkItemRecord
 from app.pursuit_reminder_db import PursuitReminderRecord
 from app.pursuit_reminders import (
     acknowledge_reminder,

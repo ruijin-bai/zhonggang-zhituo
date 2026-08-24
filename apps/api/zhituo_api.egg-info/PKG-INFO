@@ -1,0 +1,22 @@
+Metadata-Version: 2.4
+Name: zhituo-api
+Version: 0.15.0
+Summary: Zhonggang Zhituo market intelligence API
+Requires-Python: >=3.12
+Requires-Dist: fastapi==0.141.1
+Requires-Dist: uvicorn[standard]<1,>=0.35
+Requires-Dist: pydantic<3,>=2.11
+Requires-Dist: pydantic-settings<3,>=2.10
+Requires-Dist: sqlalchemy<3,>=2.0
+Requires-Dist: psycopg[binary]<4,>=3.2
+Requires-Dist: alembic<2,>=1.16
+Requires-Dist: httpx<1,>=0.28
+Requires-Dist: celery[redis]<5.7,>=5.6.2
+Requires-Dist: redis<6.5,>=5.3
+Requires-Dist: PyJWT[crypto]<3,>=2.10
+Requires-Dist: prometheus-client<1,>=0.22
+Requires-Dist: pypdf<7,>=6
+Requires-Dist: boto3==1.43.72
+Provides-Extra: dev
+Requires-Dist: pytest<9,>=8.4; extra == "dev"
+Requires-Dist: ruff<1,>=0.12; extra == "dev"

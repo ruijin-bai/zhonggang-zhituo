@@ -19,7 +19,6 @@ from .db import (
 from .pursuit_db import PursuitWorkItemRecord
 from .pursuit_reminder_db import PursuitReminderRecord
 
-
 ACTIVE_WORK_STATUSES = ("open", "in_progress", "blocked")
 
 

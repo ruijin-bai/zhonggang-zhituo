@@ -1,5 +1,5 @@
-from datetime import timedelta
 import uuid
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import create_engine, select

@@ -15,7 +15,7 @@ from .pursuit_db import (
     PursuitWorkItemRecord,
     PursuitWorkspaceRecord,
 )
-from .security import Principal, ROLE_LEVEL
+from .security import ROLE_LEVEL, Principal
 
 VALID_PARTICIPANT_ROLES = {"lead", "contributor", "reviewer", "watcher"}
 VALID_WORK_STATUSES = {"open", "in_progress", "blocked", "done", "cancelled"}

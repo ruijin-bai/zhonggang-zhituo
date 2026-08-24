@@ -5,8 +5,8 @@ from urllib.parse import unquote, urlparse
 
 from pypdf import PdfReader
 
-from .base import ConnectorFetchOutcome, ConnectorResult, SourceDocument, build_document
 from ..web_fetch import PublicResource, fetch_public_resource
+from .base import ConnectorFetchOutcome, ConnectorResult, SourceDocument, build_document
 
 MAX_PDF_BYTES = 25_000_000
 MAX_PDF_PAGES = 300

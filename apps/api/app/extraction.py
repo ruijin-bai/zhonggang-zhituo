@@ -2,7 +2,6 @@ import re
 
 from .models import ExtractedFact, SourceExtraction
 
-
 FINANCING_RULES: list[tuple[tuple[str, ...], str, int, float]] = [
     (
         (
