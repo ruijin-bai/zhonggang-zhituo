@@ -1,0 +1,121 @@
+import uuid
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session
+
+from app.config import get_settings
+from app.db import BackgroundJobRecord, OrganizationRecord, UserRecord
+
+settings = get_settings()
+pytestmark = pytest.mark.skipif(
+    not settings.database_url.startswith("postgresql"),
+    reason="PostgreSQL job ledger RLS test requires PostgreSQL",
+)
+
+
+def test_postgres_rls_blocks_cross_tenant_job_reads() -> None:
+    suffix = uuid.uuid4().hex[:8]
+    org_a = f"job-rls-org-a-{suffix}"
+    org_b = f"job-rls-org-b-{suffix}"
+    user_a = f"job-rls-user-a-{suffix}"
+    user_b = f"job-rls-user-b-{suffix}"
+    job_a = str(uuid.uuid4())
+    job_b = str(uuid.uuid4())
+    role = f"zhituo_job_rls_{suffix}"
+    password = f"JobRls-{suffix}-Password-123!"
+
+    admin_engine = create_engine(settings.database_url, pool_pre_ping=True)
+    runtime_engine = None
+    role_created = False
+    try:
+        with Session(admin_engine) as session:
+            session.add_all(
+                [
+                    OrganizationRecord(id=org_a, name=f"Job RLS Org A {suffix}", code=f"JOB-A-{suffix}", is_active=True),
+                    OrganizationRecord(id=org_b, name=f"Job RLS Org B {suffix}", code=f"JOB-B-{suffix}", is_active=True),
+                    UserRecord(id=user_a, email=f"job-a-{suffix}@example.com", display_name="Job A", is_active=True),
+                    UserRecord(id=user_b, email=f"job-b-{suffix}@example.com", display_name="Job B", is_active=True),
+                ]
+            )
+            session.flush()
+            session.add_all(
+                [
+                    BackgroundJobRecord(
+                        id=job_a,
+                        organization_id=org_a,
+                        job_type="strategy.generate",
+                        task_name="zhituo.strategy.generate",
+                        task_args=["opp-a", org_a],
+                        submitted_by_user_id=user_a,
+                        submitted_by_email=f"job-a-{suffix}@example.com",
+                        status="failed",
+                        attempts=1,
+                    ),
+                    BackgroundJobRecord(
+                        id=job_b,
+                        organization_id=org_b,
+                        job_type="strategy.generate",
+                        task_name="zhituo.strategy.generate",
+                        task_args=["opp-b", org_b],
+                        submitted_by_user_id=user_b,
+                        submitted_by_email=f"job-b-{suffix}@example.com",
+                        status="failed",
+                        attempts=1,
+                    ),
+                ]
+            )
+            session.commit()
+
+        with admin_engine.begin() as connection:
+            connection.exec_driver_sql(
+                f'CREATE ROLE "{role}" LOGIN PASSWORD %s',
+                (password,),
+            )
+            role_created = True
+            connection.exec_driver_sql(f'GRANT USAGE ON SCHEMA public TO "{role}"')
+            connection.exec_driver_sql(f'GRANT SELECT ON TABLE background_jobs TO "{role}"')
+
+        runtime_url = make_url(settings.database_url).set(username=role, password=password)
+        runtime_engine = create_engine(runtime_url, pool_pre_ping=True)
+        with runtime_engine.connect() as connection:
+            connection.execute(
+                text("SELECT set_config('app.current_organization_id', :org, false)"),
+                {"org": org_a},
+            )
+            ids = connection.execute(
+                text("SELECT id FROM background_jobs WHERE id IN (:a, :b) ORDER BY id"),
+                {"a": job_a, "b": job_b},
+            ).scalars().all()
+            assert ids == [job_a]
+
+            connection.execute(
+                text("SELECT set_config('app.current_organization_id', :org, false)"),
+                {"org": org_b},
+            )
+            ids = connection.execute(
+                text("SELECT id FROM background_jobs WHERE id IN (:a, :b) ORDER BY id"),
+                {"a": job_a, "b": job_b},
+            ).scalars().all()
+            assert ids == [job_b]
+    finally:
+        if runtime_engine is not None:
+            runtime_engine.dispose()
+        with admin_engine.begin() as connection:
+            if role_created:
+                connection.exec_driver_sql(f'DROP OWNED BY "{role}"')
+                connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
+            connection.execute(
+                text("DELETE FROM background_jobs WHERE id IN (:a, :b)"),
+                {"a": job_a, "b": job_b},
+            )
+            connection.execute(
+                text("DELETE FROM users WHERE id IN (:a, :b)"),
+                {"a": user_a, "b": user_b},
+            )
+            connection.execute(
+                text("DELETE FROM organizations WHERE id IN (:a, :b)"),
+                {"a": org_a, "b": org_b},
+            )
+        admin_engine.dispose()
