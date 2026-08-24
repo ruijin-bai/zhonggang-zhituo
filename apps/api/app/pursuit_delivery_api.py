@@ -48,7 +48,11 @@ def pursuit_reminder_delivery_retry(
         if row.status != "failed":
             raise RuntimeError("only failed reminder deliveries can be manually retried")
         now = utc_now()
+        previous_attempt_count = row.attempt_count
         row.status = "retry"
+        # Manual retry means an operator has intervened after automatic exhaustion. Give the
+        # delivery a fresh automatic retry budget while preserving the previous count in Audit.
+        row.attempt_count = 0
         row.next_attempt_at = now
         row.lease_until = None
         row.lease_token = None
@@ -64,7 +68,7 @@ def pursuit_reminder_delivery_retry(
             details={
                 "reminder_id": row.reminder_id,
                 "channel": row.channel,
-                "attempt_count": row.attempt_count,
+                "previous_attempt_count": previous_attempt_count,
             },
         )
         db.commit()
