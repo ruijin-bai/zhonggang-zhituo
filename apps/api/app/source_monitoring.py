@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from uuid import uuid4
 
@@ -46,6 +46,13 @@ class SourceScanResult(BaseModel):
 
 def _url_hash(url: str) -> str:
     return sha256(url.strip().encode("utf-8")).hexdigest()
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Normalize timestamps across PostgreSQL and SQLite development sessions."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _validated_interval(value: int) -> int:
@@ -174,7 +181,7 @@ def update_subscription(
         record.interval_seconds = _validated_interval(body.interval_seconds)
         if record.status == "active":
             record.next_scan_at = min(
-                record.next_scan_at,
+                _as_utc(record.next_scan_at),
                 utc_now() + timedelta(seconds=record.interval_seconds),
             )
     record.updated_at = utc_now()
@@ -286,7 +293,7 @@ def claim_manual_scan(
     record = _lock_subscription(session, subscription_id)
     if record is None:
         raise ValueError("source subscription not found")
-    if record.lease_until is not None and record.lease_until >= now:
+    if record.lease_until is not None and _as_utc(record.lease_until) >= now:
         session.rollback()
         raise ValueError("source subscription already has a scan in progress")
     token = str(uuid4())
