@@ -14,6 +14,11 @@ from .candidate_db import CandidateProcessingRecord
 from .config import get_settings
 from .db import OpportunityDraftRecord, utc_now
 from .document_store import DocumentStore, build_document_store
+from .intelligence import (
+    link_candidate_source,
+    record_document_insight,
+    resolve_discovery_entities,
+)
 from .project_matching import opportunity_duplicate_matches, pending_draft_duplicate
 from .source_db import SourceDocumentRecord
 
@@ -281,10 +286,26 @@ async def process_candidate_document(
         row.processed_at = now
         row.updated_at = now
 
+        # Persist the structured understanding per immutable SourceDocument. This allows a later
+        # candidate confirmation to aggregate every source's facts instead of retaining only the
+        # first document that happened to create the draft.
+        record_document_insight(
+            session,
+            source_document_id=source_document_id,
+            discovery=discovery,
+            extraction_mode=mode,
+        )
+
         if not discovery.project_detected:
             row.status = "no_project"
             session.commit()
             return _result(row)
+
+        resolve_discovery_entities(
+            session,
+            discovery=discovery,
+            source_document_id=source_document_id,
+        )
 
         duplicate = pending_draft_duplicate(
             discovery,
@@ -294,6 +315,15 @@ async def process_candidate_document(
         if duplicate is not None:
             row.status = "duplicate"
             row.duplicate_draft_id = duplicate[0]
+            link_candidate_source(
+                session,
+                draft_id=duplicate[0],
+                source_document_id=source_document_id,
+                is_primary=False,
+            )
+            existing_draft = session.get(OpportunityDraftRecord, duplicate[0])
+            if existing_draft is not None:
+                existing_draft.updated_at = now
             session.commit()
             return _result(row)
 
@@ -310,15 +340,21 @@ async def process_candidate_document(
                 publisher=document.publisher or "公开来源",
                 published_at=published_at,
                 source_rank="B",
-                # Full normalized text remains immutable in DocumentStore. The processing ledger
-                # links this draft back to SourceDocument, so the candidate table does not need a
-                # second 100k+ text copy.
+                # Full normalized text remains immutable in DocumentStore. The source-link table
+                # connects all supporting SourceDocuments to the candidate without copying body
+                # text into PostgreSQL.
                 raw_text="",
                 duplicate_matches=[item.model_dump(mode="json") for item in duplicate_matches],
                 is_demo=False,
             )
         )
         session.flush()
+        link_candidate_source(
+            session,
+            draft_id=draft_id,
+            source_document_id=source_document_id,
+            is_primary=True,
+        )
         row.status = "candidate_created"
         row.draft_id = draft_id
         session.commit()
