@@ -46,6 +46,10 @@ JOB_STUCK_RECONCILED = Counter(
     "Background jobs marked failed by stuck-job reconciliation",
     ["job_type"],
 )
+JOB_STALE_QUEUED = Gauge(
+    "zhituo_background_jobs_stale_queued",
+    "Queued jobs older than the configured stuck threshold; observed but not auto-failed",
+)
 JOB_QUEUE_LATENCY = Histogram(
     "zhituo_background_job_queue_latency_seconds",
     "Time from job submission until first execution attempt",
@@ -107,6 +111,10 @@ def observe_job_duration(job_type: str, status: str, seconds: float) -> None:
 
 def observe_stuck_reconciled(job_type: str) -> None:
     JOB_STUCK_RECONCILED.labels(job_type).inc()
+
+
+def set_stale_queued_jobs(count: int) -> None:
+    JOB_STALE_QUEUED.set(max(0, count))
 
 
 def _check_metrics_token(request: Request) -> None:
