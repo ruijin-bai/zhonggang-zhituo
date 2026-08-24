@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zhituo-api"
-version = "0.14.0"
+version = "0.15.0"
 description = "Zhonggang Zhituo market intelligence API"
 requires-python = ">=3.12"
 dependencies = [
@@ -20,7 +20,8 @@ dependencies = [
   "redis>=5.3,<6.5",
   "PyJWT[crypto]>=2.10,<3",
   "prometheus-client>=0.22,<1",
-  "pypdf>=6,<7"
+  "pypdf>=6,<7",
+  "boto3==1.43.72"
 ]
 
 [project.optional-dependencies]
