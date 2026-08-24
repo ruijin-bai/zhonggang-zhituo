@@ -58,7 +58,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     pursuit_actions,
     pursuit_alerts,
     idempotency_records,
-    background_jobs
+    background_jobs,
+    source_fetches,
+    source_documents
 TO :"runtime_role";
 
 -- Audit is append/read but never updated/deleted by the application.
