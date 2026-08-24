@@ -36,7 +36,7 @@ export default async function CandidateReviewPage({ params }: { params: Promise<
       <section className={styles.heroMetrics}>
         <div className={styles.heroMetric}><span>识别置信度</span><strong>{Math.round(candidate.discovery.confidence * 100)}%</strong></div>
         <div className={styles.heroMetric}><span>支持来源</span><strong>{candidate.source_count}</strong></div>
-        <div className={styles.heroMetric}><span>已解析主体</span><strong>{candidate.entities.length}</strong></div>
+        <div className={styles.heroMetric}><span>主体角色关系</span><strong>{candidate.entities.length}</strong></div>
         <div className={styles.heroMetric}><span>疑似正式机会</span><strong>{candidate.duplicate_matches.length}</strong></div>
       </section>
 
@@ -96,16 +96,14 @@ export default async function CandidateReviewPage({ params }: { params: Promise<
           </section>
 
           <section className={styles.knowledgeSection}>
-            <div className={styles.sectionTitle}><h2>经营主体</h2><span className={styles.meta}>{candidate.entities.length} 个</span></div>
+            <div className={styles.sectionTitle}><h2>经营主体</h2><span className={styles.meta}>{candidate.entities.length} 个角色关系</span></div>
             {candidate.entities.length ? (
               <div className={styles.entityList}>
                 {candidate.entities.map((entity) => (
-                  <article className={styles.entityCard} key={entity.entity_id}>
-                    <strong>{entity.name}</strong>
+                  <article className={styles.entityCard} key={`${entity.id}-${entity.role}`}>
+                    <Link className={styles.resultTitle} href={`/knowledge/entities/${encodeURIComponent(entity.id)}`}>{entity.name}</Link>
                     <div className={styles.meta}>{entity.country || "国别待核实"} · 来源 {entity.source_count}</div>
-                    <div className={styles.matched}>
-                      {entity.roles.map((role) => <span className={styles.roleBadge} key={role}>{role}</span>)}
-                    </div>
+                    <div className={styles.matched}><span className={styles.roleBadge}>{entity.role}</span></div>
                   </article>
                 ))}
               </div>

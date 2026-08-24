@@ -38,7 +38,7 @@ function destination(item: SearchResultItem): string | null {
     return `/knowledge/candidates/${encodeURIComponent(item.resource_id)}`;
   }
   if (item.resource_type === "entity") {
-    return `/knowledge?q=${encodeURIComponent(item.title)}&types=entity`;
+    return `/knowledge/entities/${encodeURIComponent(item.resource_id)}`;
   }
   return null;
 }
@@ -95,14 +95,16 @@ function CandidateCard({ item }: { item: CandidateItem }) {
       <div className={styles.snippet}>{item.discovery.summary}</div>
       <div className={styles.candidateMeta}>
         <div className={styles.metric}>来源 <strong>{item.source_count}</strong></div>
-        <div className={styles.metric}>主体 <strong>{item.entities.length}</strong></div>
+        <div className={styles.metric}>主体角色 <strong>{item.entities.length}</strong></div>
         <div className={styles.metric}>业主 <strong>{item.discovery.owner}</strong></div>
         <div className={styles.metric}>疑似正式机会 <strong>{item.duplicate_matches.length}</strong></div>
       </div>
       {item.entities.length ? (
         <div className={styles.matched}>
           {item.entities.slice(0, 5).map((entity) => (
-            <span className={styles.roleBadge} key={entity.entity_id}>{entity.name} · {entity.roles.join("/")}</span>
+            <Link className={styles.roleBadge} href={`/knowledge/entities/${encodeURIComponent(entity.id)}`} key={`${entity.id}-${entity.role}`}>
+              {entity.name} · {entity.role}
+            </Link>
           ))}
         </div>
       ) : null}
@@ -159,6 +161,7 @@ export default async function KnowledgePage({ searchParams }: PageProps) {
           <h1>经营情报工作台</h1>
           <div className="muted">统一查项目、业主、融资方、证据与来源，并把待审候选放到同一个经营入口。</div>
         </div>
+        <Link className="primary-button" href="/knowledge/entities">浏览经营主体</Link>
       </header>
 
       {error ? <div className="error-box" style={{ marginBottom: 16 }}>{error}。请检查认证、API 与数据库连接。</div> : null}

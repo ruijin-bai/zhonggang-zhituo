@@ -75,10 +75,10 @@ export type CandidateItem = {
   source_count: number;
   source_document_ids: string[];
   entities: Array<{
-    entity_id: string;
+    id: string;
     name: string;
     country: string | null;
-    roles: string[];
+    role: string;
     source_count: number;
   }>;
   created_at: string;
