@@ -180,14 +180,15 @@ jobs:
       - name: Generate Web CycloneDX SBOM
         working-directory: apps/web
         run: npm sbom --sbom-format cyclonedx > ../../web-sbom.cdx.json
-      - name: Upload software bills of materials
+      - name: Upload software bills of materials and generated Web lockfile
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zhituo-sbom-${{ github.sha }}
+          name: zhituo-supply-chain-${{ github.sha }}
           path: |
             api-sbom.cdx.json
             web-sbom.cdx.json
+            apps/web/package-lock.json
           if-no-files-found: warn
           retention-days: 30
 
