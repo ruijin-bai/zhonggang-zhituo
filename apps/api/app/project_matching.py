@@ -10,21 +10,55 @@ from .models import DuplicateMatch, ProjectDiscovery
 from .repository import list_opportunities
 
 
+_UNKNOWN_VALUES = {"", "待识别", "待核实", "unknown", "n/a", "na", "none"}
+
+
+def _known(value: str | None) -> bool:
+    return bool(value and value.strip().lower() not in _UNKNOWN_VALUES)
+
+
+def _same_known(left: str | None, right: str | None) -> bool:
+    return bool(
+        _known(left)
+        and _known(right)
+        and left is not None
+        and right is not None
+        and left.strip().lower() == right.strip().lower()
+    )
+
+
 def _project_similarity(
     left_title: str,
     left_country: str,
     right_title: str,
     right_country: str,
+    *,
+    left_sector: str | None = None,
+    right_sector: str | None = None,
+    left_owner: str | None = None,
+    right_owner: str | None = None,
 ) -> float:
     title_similarity = SequenceMatcher(None, left_title.lower(), right_title.lower()).ratio()
-    country_bonus = (
-        0.12
-        if left_country != "待识别"
-        and right_country != "待识别"
-        and left_country == right_country
-        else 0.0
-    )
-    return min(1.0, title_similarity + country_bonus)
+
+    # Known country disagreement is a strong identity conflict. Without this guard, two generic
+    # projects named e.g. "National Highway Project" in different countries can score 1.0 from
+    # title equality and be incorrectly auto-suppressed.
+    if _known(left_country) and _known(right_country) and not _same_known(left_country, right_country):
+        return min(0.55, title_similarity)
+
+    score = title_similarity
+    if _same_known(left_country, right_country):
+        score += 0.12
+    if _same_known(left_sector, right_sector):
+        score += 0.05
+    if _same_known(left_owner, right_owner):
+        score += 0.05
+
+    # A known sector conflict should never trigger high-confidence candidate auto-dedupe, while
+    # still allowing the formal-opportunity UI to show a weak human-review hint when titles match.
+    if _known(left_sector) and _known(right_sector) and not _same_known(left_sector, right_sector):
+        return min(0.70, score)
+    return min(1.0, score)
 
 
 def opportunity_duplicate_matches(
@@ -38,6 +72,10 @@ def opportunity_duplicate_matches(
             discovery.country,
             item.title,
             item.country,
+            left_sector=discovery.sector,
+            right_sector=item.sector,
+            left_owner=discovery.owner,
+            right_owner=item.owner,
         )
         if score >= 0.58:
             matches.append(
@@ -81,6 +119,10 @@ def pending_draft_duplicate(
             discovery.country,
             candidate.title,
             candidate.country,
+            left_sector=discovery.sector,
+            right_sector=candidate.sector,
+            left_owner=discovery.owner,
+            right_owner=candidate.owner,
         )
         if score < threshold:
             continue
