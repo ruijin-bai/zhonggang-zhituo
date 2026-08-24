@@ -42,10 +42,8 @@ WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'backup_role')
 GRANT CONNECT ON DATABASE :"database_name" TO :"runtime_role", :"backup_role";
 GRANT USAGE ON SCHEMA public TO :"runtime_role", :"backup_role";
 
--- Identity/control-plane reads required before tenant context is selected.
 GRANT SELECT ON TABLE organizations, users, memberships TO :"runtime_role";
 
--- Tenant-scoped business tables. RLS remains authoritative for runtime_role.
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     opportunities,
     sources,
@@ -60,16 +58,15 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     idempotency_records,
     background_jobs,
     source_fetches,
-    source_documents
+    source_documents,
+    source_subscriptions,
+    source_scan_runs
 TO :"runtime_role";
 
--- Audit is append/read but never updated/deleted by the application.
 GRANT SELECT, INSERT ON TABLE audit_logs TO :"runtime_role";
 
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"runtime_role";
 
--- backup_role is deliberately read-only but BYPASSRLS so a full database backup is complete.
--- Treat its credential as a high-sensitivity secret and never use it for API/Worker traffic.
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO :"backup_role";
 GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO :"backup_role";
 
