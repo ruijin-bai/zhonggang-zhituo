@@ -18,7 +18,6 @@ from .db import (
     SourceRecord,
 )
 from .document_store import DocumentStore, build_document_store
-from .entity_management import enforce_reviewed_owner
 from .intelligence import (
     aggregate_candidate_entities_to_opportunity,
     candidate_source_links,
@@ -32,6 +31,10 @@ from .models import (
     DraftOpportunity,
     ProjectDiscovery,
     ScoreBreakdown,
+)
+from .opportunity_evidence import (
+    link_opportunity_source_document,
+    sync_opportunity_entities,
 )
 from .project_matching import opportunity_duplicate_matches
 from .repository import get_opportunity
@@ -323,6 +326,13 @@ def confirm_draft(
                 text("UPDATE sources SET source_document_id=:document WHERE id=:source"),
                 {"document": evidence_source.source_document_id, "source": source_id},
             )
+        if evidence_source.source_document_id:
+            link_opportunity_source_document(
+                session,
+                opportunity_id=opportunity_id,
+                source_document_id=evidence_source.source_document_id,
+                source_id=source_id,
+            )
         for fact in evidence_source.discovery.facts:
             session.add(
                 EvidenceRecord(
@@ -340,22 +350,13 @@ def confirm_draft(
                 )
             )
 
-    entity_links = aggregate_candidate_entities_to_opportunity(
+    aggregate_candidate_entities_to_opportunity(
         session,
         draft_id=draft.id,
         opportunity_id=opportunity_id,
         fallback_discovery=reviewed_discovery,
     )
-    reviewed_owner_link = enforce_reviewed_owner(
-        session,
-        opportunity_id=opportunity_id,
-        discovery=reviewed_discovery,
-        source_count=len(evidence_sources),
-    )
-    if reviewed_owner_link is not None and all(
-        item.id != reviewed_owner_link.id for item in entity_links if item.id is not None
-    ):
-        entity_links.append(reviewed_owner_link)
+    entity_links = sync_opportunity_entities(session, opportunity_id=opportunity_id)
 
     session.add(
         ScoreSnapshotRecord(
