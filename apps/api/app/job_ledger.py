@@ -17,6 +17,7 @@ from .security import Principal
 logger = logging.getLogger("zhituo.jobs")
 TERMINAL_JOB_STATES = {"succeeded", "failed"}
 ACTIVE_JOB_STATES = {"queued", "running", "retrying"}
+RECONCILABLE_STATES = {"running", "retrying"}
 
 
 def _now() -> datetime:
@@ -159,12 +160,29 @@ def list_stuck_job_records(
     return session.scalars(
         select(BackgroundJobRecord)
         .where(
-            BackgroundJobRecord.status.in_(ACTIVE_JOB_STATES),
+            BackgroundJobRecord.status.in_(RECONCILABLE_STATES),
             BackgroundJobRecord.updated_at < cutoff,
         )
         .order_by(BackgroundJobRecord.updated_at.asc())
         .limit(limit)
     ).all()
+
+
+def count_stale_queued_jobs(
+    session: Session,
+    *,
+    threshold_seconds: int | None = None,
+) -> int:
+    threshold = threshold_seconds or get_settings().job_stuck_after_seconds
+    cutoff = _now() - timedelta(seconds=threshold)
+    return len(
+        session.scalars(
+            select(BackgroundJobRecord.id).where(
+                BackgroundJobRecord.status == "queued",
+                BackgroundJobRecord.updated_at < cutoff,
+            )
+        ).all()
+    )
 
 
 def reconcile_stuck_jobs(
