@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  statuses: write
+
 jobs:
   web:
     runs-on: ubuntu-latest
@@ -101,7 +105,8 @@ jobs:
             -f ../../ops/postgres/provision_runtime_role.sql
           test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT rolbypassrls FROM pg_roles WHERE rolname='zhituo_ci_runtime'")" = "f"
           test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT rolbypassrls FROM pg_roles WHERE rolname='zhituo_ci_backup'")" = "t"
-          test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_backup','opportunities','INSERT')")" = "f"
+          test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_runtime','background_jobs','INSERT')")" = "t"
+          test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_backup','background_jobs','INSERT')")" = "f"
       - name: Verify Redis connectivity
         run: python -c "from redis import Redis; assert Redis.from_url('redis://127.0.0.1:6379/0').ping()"
       - name: Run unit, integration and PostgreSQL RLS tests
@@ -141,3 +146,34 @@ jobs:
         run: docker run --rm --entrypoint python zhituo-api:ci -c "import app.main; print('api-import-ok')"
       - name: Build Web production image
         run: docker build --pull -t zhituo-web:ci apps/web
+
+  ci-gate:
+    if: always()
+    needs: [web, api, containers]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish CI gate status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WEB_RESULT: ${{ needs.web.result }}
+          API_RESULT: ${{ needs.api.result }}
+          CONTAINERS_RESULT: ${{ needs.containers.result }}
+          SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          if [ "$WEB_RESULT" = "success" ] && [ "$API_RESULT" = "success" ] && [ "$CONTAINERS_RESULT" = "success" ]; then
+            STATE=success
+            DESCRIPTION='web, api and containers passed'
+          else
+            STATE=failure
+            DESCRIPTION="web=$WEB_RESULT api=$API_RESULT containers=$CONTAINERS_RESULT"
+          fi
+          curl --fail-with-body -sS \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPOSITORY/statuses/$SHA" \
+            -d "$(jq -nc --arg state "$STATE" --arg target_url "https://github.com/$REPOSITORY/actions/runs/$RUN_ID" --arg description "$DESCRIPTION" '{state:$state,target_url:$target_url,description:$description,context:"zhituo/ci-gate"}')"
+          test "$STATE" = success
