@@ -86,6 +86,27 @@ class IdempotencyRecord(TenantScopedMixin, Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
+class BackgroundJobRecord(TenantScopedMixin, Base):
+    __tablename__ = "background_jobs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_type: Mapped[str] = mapped_column(String(120), index=True)
+    task_name: Mapped[str] = mapped_column(String(160))
+    task_args: Mapped[list] = mapped_column(JSON, default=list)
+    resource_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    submitted_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    submitted_by_email: Mapped[str] = mapped_column(String(320))
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    retry_of_job_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    request_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
 class OpportunityRecord(TenantScopedMixin, Base):
     __tablename__ = "opportunities"
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
@@ -228,6 +249,7 @@ class PursuitAlertRecord(TenantScopedMixin, Base):
 
 TENANT_MODELS = (
     IdempotencyRecord,
+    BackgroundJobRecord,
     OpportunityRecord,
     SourceRecord,
     EvidenceRecord,
