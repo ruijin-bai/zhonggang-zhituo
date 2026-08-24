@@ -278,9 +278,21 @@ def _apply_postgres_tenant_context(connection, organization_id: str) -> None:
 
 
 def set_tenant_context(session: Session, organization_id: str) -> None:
-    """Bind both ORM filtering and PostgreSQL RLS context to one organization."""
+    """Bind ORM filtering, identity-map isolation and PostgreSQL RLS to one organization."""
     if not organization_id:
         raise ValueError("organization_id is required")
+
+    # SQLAlchemy Session.get() may return an already-loaded instance directly from the identity
+    # map without issuing a SELECT. When a control/admin Session is later narrowed to one tenant,
+    # or a Session is explicitly switched between tenants, evict cached business objects owned by
+    # another organization so they cannot bypass select-time ORM criteria or PostgreSQL RLS.
+    for record in list(session.identity_map.values()):
+        if not isinstance(record, TenantScopedMixin):
+            continue
+        record_org = getattr(record, "organization_id", None)
+        if record_org and record_org != organization_id:
+            session.expunge(record)
+
     session.info["organization_id"] = organization_id
     _apply_postgres_tenant_context(session.connection(), organization_id)
 
