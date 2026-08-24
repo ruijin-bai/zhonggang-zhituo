@@ -1,12 +1,14 @@
 import asyncio
 
 from celery.exceptions import SoftTimeLimitExceeded
+from sqlalchemy import select
 
 from .ai import AIService
 from .celery_app import celery_app
-from .db import SessionLocal, set_tenant_context
+from .db import OrganizationRecord, SessionLocal, set_tenant_context
 from .discovery import discover
 from .ingestion import ingest_source
+from .job_ledger import reconcile_stuck_jobs
 from .models import DiscoverRequest, SourceIngestRequest
 from .radar import BatchScanRequest, batch_scan
 from .repository import get_opportunity
@@ -23,6 +25,20 @@ def _tenant_session(organization_id: str):
     session = SessionLocal()
     set_tenant_context(session, organization_id)
     return session
+
+
+@celery_app.task(name="zhituo.maintenance.reconcile_stuck_jobs")
+def reconcile_stuck_jobs_task() -> dict:
+    with SessionLocal() as control_session:
+        organization_ids = control_session.scalars(
+            select(OrganizationRecord.id).where(OrganizationRecord.is_active.is_(True))
+        ).all()
+
+    reconciled: list[str] = []
+    for organization_id in organization_ids:
+        with _tenant_session(organization_id) as session:
+            reconciled.extend(reconcile_stuck_jobs(session))
+    return {"organizations_scanned": len(organization_ids), "reconciled": reconciled}
 
 
 @celery_app.task(bind=True, base=TrackedTask, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.discovery.scan")
