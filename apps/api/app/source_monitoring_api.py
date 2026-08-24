@@ -26,7 +26,7 @@ from .source_monitoring import (
 )
 from .tasks import source_subscription_scan_task
 
-router = APIRouter(prefix="/api/sources", tags=["sources"])
+router = APIRouter(prefix="/sources", tags=["sources"])
 settings = get_settings()
 
 
