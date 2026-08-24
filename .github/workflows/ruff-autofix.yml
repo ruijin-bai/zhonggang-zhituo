@@ -26,7 +26,7 @@ jobs:
       - name: Apply Ruff safe fixes
         run: |
           cd apps/api
-          uv run ruff check app tests --fix
+          uv run ruff check app tests --fix || true
       - name: Commit safe Ruff fixes
         run: |
           if git diff --quiet; then
