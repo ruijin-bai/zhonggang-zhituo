@@ -93,6 +93,7 @@ class SourceSubscriptionRecord(TenantScopedMixin, Base):
     interval_seconds: Mapped[int] = mapped_column(Integer)
     next_scan_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    lease_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
     etag: Mapped[str | None] = mapped_column(String(500), nullable=True)
     last_modified: Mapped[str | None] = mapped_column(String(500), nullable=True)
     consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
