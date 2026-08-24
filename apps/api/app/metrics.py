@@ -46,6 +46,18 @@ JOB_STUCK_RECONCILED = Counter(
     "Background jobs marked failed by stuck-job reconciliation",
     ["job_type"],
 )
+JOB_QUEUE_LATENCY = Histogram(
+    "zhituo_background_job_queue_latency_seconds",
+    "Time from job submission until first execution attempt",
+    ["job_type"],
+    buckets=(0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300),
+)
+JOB_DURATION = Histogram(
+    "zhituo_background_job_duration_seconds",
+    "Background job execution duration",
+    ["job_type", "status"],
+    buckets=(0.5, 1, 2.5, 5, 10, 30, 60, 90, 120, 180, 300),
+)
 DEPENDENCY_UP = Gauge(
     "zhituo_dependency_up",
     "Dependency health observed during metrics scrape",
@@ -83,6 +95,14 @@ def observe_job_transition(job_type: str, status: str, *, increment_attempt: boo
         JOB_FAILURES.labels(job_type).inc()
     elif status == "retrying":
         JOB_RETRIES.labels(job_type).inc()
+
+
+def observe_job_queue_latency(job_type: str, seconds: float) -> None:
+    JOB_QUEUE_LATENCY.labels(job_type).observe(max(0, seconds))
+
+
+def observe_job_duration(job_type: str, status: str, seconds: float) -> None:
+    JOB_DURATION.labels(job_type, status).observe(max(0, seconds))
 
 
 def observe_stuck_reconciled(job_type: str) -> None:
