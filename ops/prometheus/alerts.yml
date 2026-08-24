@@ -75,10 +75,19 @@ groups:
           summary: "智拓后台任务排队延迟过高"
           description: "后台任务排队 P95 连续 10 分钟超过 30 秒。"
 
+      - alert: ZhituoStaleQueuedJobs
+        expr: zhituo_background_jobs_stale_queued > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "智拓存在长期未开始的排队任务"
+          description: "至少一个 queued Job 超过 stuck 阈值仍未开始；系统不会自动判失败，请检查 Worker 容量、Broker 或任务路由。"
+
       - alert: ZhituoStuckJobDetected
         expr: increase(zhituo_background_jobs_reconciled_stuck_total[10m]) > 0
         labels:
           severity: critical
         annotations:
           summary: "智拓检测到卡死后台任务"
-          description: "Stuck Job Reconciler 在过去 10 分钟处理了至少一个异常任务。"
+          description: "Stuck Job Reconciler 在过去 10 分钟处理了至少一个 running/retrying 异常任务。"
