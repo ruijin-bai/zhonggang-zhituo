@@ -1,4 +1,5 @@
 import asyncio
+from datetime import timedelta
 from types import SimpleNamespace
 
 from sqlalchemy import create_engine, func, select
@@ -10,7 +11,14 @@ from app.candidate_pipeline import (
     process_candidate_document,
 )
 from app.connectors.base import ConnectorResult, build_document
-from app.db import Base, OpportunityDraftRecord, OrganizationRecord, SourceRecord, set_tenant_context
+from app.db import (
+    Base,
+    OpportunityDraftRecord,
+    OrganizationRecord,
+    SourceRecord,
+    set_tenant_context,
+    utc_now,
+)
 from app.discovery import confirm_draft
 from app.document_store import LocalDocumentStore
 from app.models import ConfirmDraftRequest, ProjectDiscovery
@@ -289,5 +297,47 @@ def test_failed_candidate_processing_retries_then_becomes_terminal(monkeypatch, 
     assert second.status == "failed"
     assert second.attempts == 2
     assert second.error
+    session.close()
+    engine.dispose()
+
+
+def test_stale_candidate_worker_cannot_overwrite_newer_lease(monkeypatch, tmp_path):
+    monkeypatch.setattr("app.candidate_pipeline.get_settings", lambda: _settings())
+    engine, session, _ = _tenant_session("CAND-E")
+    store = LocalDocumentStore(tmp_path)
+    archived = _archive(
+        session,
+        store,
+        title="Lease fenced candidate",
+        text="Specific bridge project procurement notice " + ("F" * 100),
+        url="https://8.8.8.8/lease-fenced",
+    )
+    processing_id = archived.documents[0].id
+
+    first_claim = claim_candidate_processing(session)[0]
+    old_token = first_claim[1]
+    row = session.get(CandidateProcessingRecord, processing_id)
+    row.lease_until = utc_now() - timedelta(seconds=1)
+    session.commit()
+
+    second_claim = claim_candidate_processing(session)[0]
+    new_token = second_claim[1]
+    assert new_token != old_token
+
+    stale = asyncio.run(
+        process_candidate_document(
+            session,
+            processing_id,
+            lease_token=old_token,
+            store=store,
+            ai_service=FakeAI(_project("Lease fenced candidate")),
+        )
+    )
+    assert stale.status == "stale_claim"
+    row = session.get(CandidateProcessingRecord, processing_id)
+    assert row.status == "processing"
+    assert row.lease_token == new_token
+    assert row.attempts == 0
+    assert session.scalar(select(func.count()).select_from(OpportunityDraftRecord)) == 0
     session.close()
     engine.dispose()
