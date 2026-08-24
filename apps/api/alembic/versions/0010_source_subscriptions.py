@@ -51,6 +51,7 @@ def upgrade() -> None:
         sa.Column("interval_seconds", sa.Integer(), nullable=False),
         sa.Column("next_scan_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("lease_until", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("lease_token", sa.String(length=36), nullable=True),
         sa.Column("etag", sa.String(length=500), nullable=True),
         sa.Column("last_modified", sa.String(length=500), nullable=True),
         sa.Column("consecutive_failures", sa.Integer(), nullable=False),
