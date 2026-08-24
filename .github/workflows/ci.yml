@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,6 +12,9 @@ permissions:
 jobs:
   web:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,47 +24,51 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install locked Web dependencies
         run: npm ci
-      - run: npm --workspace apps/web run check
-      - run: npm --workspace apps/web run build
+      - name: Run npm --workspace apps/web run check
+        run: npm --workspace apps/web run check
+      - name: Run npm --workspace apps/web run build
+        run: npm --workspace apps/web run build
 
   api:
     runs-on: ubuntu-latest
-    env:
-      APP_ENV: test
-      DATA_BACKEND: database
-      DATABASE_URL: postgresql+psycopg://zhituo:zhituo@127.0.0.1:5432/zhituo
-      DATABASE_RLS_ENABLED: "true"
-      JOB_MODE: queue
-      REDIS_URL: redis://127.0.0.1:6379/0
-      DEMO_MODE: "true"
-      ALLOW_DEMO_FALLBACK: "true"
-      AUTH_MODE: development_header
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17
         env:
-          POSTGRES_DB: zhituo
           POSTGRES_USER: zhituo
           POSTGRES_PASSWORD: zhituo
+          POSTGRES_DB: zhituo
         ports:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U zhituo -d zhituo"
           --health-interval 5s
-          --health-timeout 3s
+          --health-timeout 5s
           --health-retries 10
       redis:
-        image: redis:8-alpine
+        image: redis:7-alpine
         ports:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
-          --health-timeout 3s
+          --health-timeout 5s
           --health-retries 10
     defaults:
       run:
         working-directory: apps/api
+    env:
+      APP_ENV: development
+      DATA_BACKEND: database
+      DATABASE_URL: postgresql+psycopg://zhituo:zhituo@127.0.0.1:5432/zhituo
+      DATABASE_ADMIN_URL: postgresql+psycopg://zhituo:zhituo@127.0.0.1:5432/zhituo
+      REDIS_URL: redis://127.0.0.1:6379/0
+      CELERY_BROKER_URL: redis://127.0.0.1:6379/0
+      CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/0
+      DATABASE_RLS_ENABLED: "true"
+      AUTH_MODE: dev
+      JOB_MODE: inline
+      DOCUMENT_STORE_BACKEND: local
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -108,7 +114,10 @@ jobs:
           test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT rolbypassrls FROM pg_roles WHERE rolname='zhituo_ci_runtime'")" = "f"
           test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT rolbypassrls FROM pg_roles WHERE rolname='zhituo_ci_backup'")" = "t"
           test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_runtime','background_jobs','INSERT')")" = "t"
+          test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_runtime','pursuit_work_items','INSERT')")" = "t"
+          test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_runtime','pursuit_decision_records','INSERT')")" = "t"
           test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_backup','background_jobs','INSERT')")" = "f"
+          test "$(psql -h 127.0.0.1 -U zhituo -d zhituo -Atc "SELECT has_table_privilege('zhituo_ci_backup','pursuit_work_items','INSERT')")" = "f"
       - name: Verify Redis connectivity
         run: uv run python -c "from redis import Redis; assert Redis.from_url('redis://127.0.0.1:6379/0').ping()"
       - name: Run unit, integration and PostgreSQL RLS tests
@@ -188,46 +197,43 @@ jobs:
       - name: Generate Web CycloneDX SBOM
         run: npm sbom --workspace apps/web --sbom-format cyclonedx > web-sbom.cdx.json
       - name: Upload software bills of materials and dependency locks
-        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zhituo-supply-chain-${{ github.sha }}
+          name: zhituo-supply-chain
           path: |
-            api-sbom.cdx.json
-            web-sbom.cdx.json
             package-lock.json
             apps/api/uv.lock
+            api-sbom.cdx.json
+            web-sbom.cdx.json
           if-no-files-found: error
-          retention-days: 30
 
   ci-gate:
-    if: always()
-    needs: [web, api, containers, security]
+    needs: [api, web, containers, security]
     runs-on: ubuntu-latest
+    if: always()
     steps:
       - name: Publish CI gate status
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WEB_RESULT: ${{ needs.web.result }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           API_RESULT: ${{ needs.api.result }}
+          WEB_RESULT: ${{ needs.web.result }}
           CONTAINERS_RESULT: ${{ needs.containers.result }}
           SECURITY_RESULT: ${{ needs.security.result }}
-          SHA: ${{ github.sha }}
-          REPOSITORY: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
         run: |
-          if [ "$WEB_RESULT" = "success" ] && [ "$API_RESULT" = "success" ] && [ "$CONTAINERS_RESULT" = "success" ] && [ "$SECURITY_RESULT" = "success" ]; then
+          if [ "$API_RESULT" = "success" ] && [ "$WEB_RESULT" = "success" ] && [ "$CONTAINERS_RESULT" = "success" ] && [ "$SECURITY_RESULT" = "success" ]; then
             STATE=success
-            DESCRIPTION='web, api, containers and security passed'
+            DESCRIPTION='All required CI jobs passed'
           else
             STATE=failure
-            DESCRIPTION="web=$WEB_RESULT api=$API_RESULT containers=$CONTAINERS_RESULT security=$SECURITY_RESULT"
+            DESCRIPTION="api=$API_RESULT web=$WEB_RESULT containers=$CONTAINERS_RESULT security=$SECURITY_RESULT"
           fi
-          curl --fail-with-body -sS \
-            -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$REPOSITORY/statuses/$SHA" \
-            -d "$(jq -nc --arg state "$STATE" --arg target_url "https://github.com/$REPOSITORY/actions/runs/$RUN_ID" --arg description "$DESCRIPTION" '{state:$state,target_url:$target_url,description:$description,context:"zhituo/ci-gate"}')"
+          gh api \
+            --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/$REPO/statuses/$SHA" \
+            -f state="$STATE" \
+            -f context='zhituo/ci-gate' \
+            -f description="$DESCRIPTION"
           test "$STATE" = success
