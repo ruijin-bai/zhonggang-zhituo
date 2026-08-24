@@ -13,6 +13,7 @@ from app.job_ledger import count_stale_queued_jobs, reconcile_stuck_jobs
 
 def test_production_metrics_require_dedicated_secret() -> None:
     values = {
+        "_env_file": None,
         "app_env": "production",
         "data_backend": "database",
         "database_url": "postgresql+psycopg://runtime:secret@db.internal:5432/zhituo",
@@ -23,6 +24,8 @@ def test_production_metrics_require_dedicated_secret() -> None:
         "auth_mode": "trusted_proxy",
         "auth_proxy_secret": "proxy-secret-at-least-32-characters-long",
         "metrics_enabled": True,
+        "document_store_backend": "s3",
+        "document_store_s3_bucket": "zhituo-production-documents",
     }
     with pytest.raises(ValidationError, match="METRICS_TOKEN"):
         Settings(**values)
