@@ -67,7 +67,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     entities,
     entity_aliases,
     source_entity_mentions,
-    opportunity_entity_links
+    opportunity_entity_links,
+    opportunity_source_documents
 TO :"runtime_role";
 
 GRANT SELECT, INSERT ON TABLE audit_logs TO :"runtime_role";
