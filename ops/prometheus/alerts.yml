@@ -1,0 +1,84 @@
+groups:
+  - name: zhituo-api
+    rules:
+      - alert: ZhituoDependencyDown
+        expr: zhituo_dependency_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "智拓依赖服务不可用"
+          description: "{{ $labels.dependency }} 连续 2 分钟健康检查失败。"
+
+      - alert: ZhituoApiHigh5xxRatio
+        expr: |
+          sum(rate(zhituo_http_requests_total{status=~"5.."}[10m]))
+          /
+          clamp_min(sum(rate(zhituo_http_requests_total[10m])), 0.001)
+          > 0.02
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "智拓 API 5xx 比例过高"
+          description: "过去 10 分钟 5xx 比例持续超过 2%。"
+
+      - alert: ZhituoApiP95LatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(zhituo_http_request_duration_seconds_bucket[10m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "智拓 API P95 延迟过高"
+          description: "非异步 API 的整体 P95 连续 10 分钟超过 1 秒。"
+
+      - alert: ZhituoRateLimitSpike
+        expr: sum(rate(zhituo_http_requests_total{status="429"}[5m])) * 60 > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "智拓限流响应异常增加"
+          description: "429 响应持续超过每分钟 10 次，需检查异常客户端或容量。"
+
+  - name: zhituo-jobs
+    rules:
+      - alert: ZhituoBackgroundJobFailureRatioHigh
+        expr: |
+          sum(rate(zhituo_background_job_failures_total[15m]))
+          /
+          clamp_min(
+            sum(rate(zhituo_background_job_transitions_total{status=~"succeeded|failed"}[15m])),
+            0.001
+          ) > 0.05
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "智拓后台任务失败率过高"
+          description: "过去 15 分钟后台任务终态失败比例持续超过 5%。"
+
+      - alert: ZhituoBackgroundJobQueueP95High
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(zhituo_background_job_queue_latency_seconds_bucket[10m]))
+          ) > 30
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "智拓后台任务排队延迟过高"
+          description: "后台任务排队 P95 连续 10 分钟超过 30 秒。"
+
+      - alert: ZhituoStuckJobDetected
+        expr: increase(zhituo_background_jobs_reconciled_stuck_total[10m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "智拓检测到卡死后台任务"
+          description: "Stuck Job Reconciler 在过去 10 分钟处理了至少一个异常任务。"
