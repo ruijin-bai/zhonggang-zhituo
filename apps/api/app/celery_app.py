@@ -8,7 +8,11 @@ celery_app = Celery(
     "zhituo",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks", "app.pursuit_reminder_tasks"],
+    include=[
+        "app.tasks",
+        "app.pursuit_reminder_tasks",
+        "app.pursuit_delivery_tasks",
+    ],
 )
 
 celery_app.conf.update(
@@ -41,6 +45,10 @@ celery_app.conf.update(
         "reconcile-pursuit-reminders": {
             "task": "zhituo.pursuit.reconcile_reminders",
             "schedule": float(settings.pursuit_reminder_reconcile_interval_seconds),
+        },
+        "dispatch-pursuit-reminder-email": {
+            "task": "zhituo.pursuit.dispatch_reminder_email",
+            "schedule": float(settings.pursuit_email_dispatch_interval_seconds),
         },
     },
 )
