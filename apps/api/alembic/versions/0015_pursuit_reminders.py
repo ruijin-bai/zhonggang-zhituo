@@ -90,7 +90,9 @@ def upgrade() -> None:
         sa.Column("dedupe_key", sa.String(length=160), nullable=False),
         sa.Column("source_due_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("escalation_level", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("occurrence_count", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("first_triggered_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("last_triggered_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_evaluated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("acknowledged_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
@@ -116,6 +118,7 @@ def upgrade() -> None:
         "source_due_at",
         "escalation_level",
         "first_triggered_at",
+        "last_triggered_at",
         "last_evaluated_at",
     ):
         op.create_index(f"ix_pursuit_reminders_{column}", "pursuit_reminders", [column])
