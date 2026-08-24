@@ -31,6 +31,18 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_utc(value: datetime) -> datetime:
+    """Normalize database timestamps before comparing them.
+
+    PostgreSQL preserves timezone-aware values, while SQLite commonly returns a naive
+    datetime even for SQLAlchemy DateTime(timezone=True). Treat a naive value as UTC so
+    development/tests exercise the same expiry semantics as production PostgreSQL.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _canonical_hash(value: Any) -> str:
     encoded = json.dumps(
         value,
@@ -113,7 +125,7 @@ def begin_operation(
     if existing is not None:
         # Only a known-completed response may age out automatically. Pending/failed records
         # represent uncertain side effects and require explicit operator review rather than replay.
-        if existing.status == "completed" and existing.expires_at <= now:
+        if existing.status == "completed" and _as_utc(existing.expires_at) <= now:
             session.delete(existing)
             session.commit()
         else:
