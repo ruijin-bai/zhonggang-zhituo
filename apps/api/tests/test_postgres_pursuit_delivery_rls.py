@@ -12,7 +12,6 @@ from app.pursuit_db import PursuitWorkspaceRecord
 from app.pursuit_delivery_db import PursuitReminderDeliveryRecord
 from app.pursuit_reminder_db import PursuitReminderRecord
 
-
 settings = get_settings()
 pytestmark = pytest.mark.skipif(
     not settings.database_url.startswith("postgresql"),

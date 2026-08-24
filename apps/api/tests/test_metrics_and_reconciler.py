@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.config import Settings
-from app.db import Base, BackgroundJobRecord, OrganizationRecord, UserRecord, set_tenant_context
+from app.db import BackgroundJobRecord, Base, OrganizationRecord, UserRecord, set_tenant_context
 from app.job_ledger import count_stale_queued_jobs, reconcile_stuck_jobs
 
 

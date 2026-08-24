@@ -1,7 +1,7 @@
+import time
 from dataclasses import dataclass
 from functools import lru_cache
 from hmac import compare_digest
-import time
 from typing import Literal
 
 import jwt

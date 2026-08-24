@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import timedelta
 import uuid
+from datetime import timedelta
 
 import pytest
 from pydantic import ValidationError

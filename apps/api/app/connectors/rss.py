@@ -5,8 +5,8 @@ from email.utils import parsedate_to_datetime
 from hashlib import sha256
 from xml.etree import ElementTree
 
-from .base import ConnectorFetchOutcome, ConnectorResult, SourceDocument, build_document
 from ..web_fetch import PublicResource, fetch_public_resource, html_to_text
+from .base import ConnectorFetchOutcome, ConnectorResult, SourceDocument, build_document
 
 MAX_FEED_BYTES = 5_000_000
 MAX_FEED_ENTRIES = 100

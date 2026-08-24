@@ -1,10 +1,13 @@
 from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+
 from .db import OpportunityEventRecord, PursuitActionRecord, PursuitAlertRecord, WatchItemRecord
 from .repository import get_opportunity
 from .strategy import get_strategy
+
 
 def _events(opportunity_id:str,session:Session):
  try:return session.scalars(select(OpportunityEventRecord).where(OpportunityEventRecord.opportunity_id==opportunity_id,OpportunityEventRecord.event_type=="strategy_updated").order_by(OpportunityEventRecord.occurred_at.desc()).limit(10)).all()

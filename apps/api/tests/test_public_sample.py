@@ -4,7 +4,6 @@ from pathlib import Path
 from app.ai import _deterministic_project
 from app.extraction import extract_facts_deterministic
 
-
 SAMPLE = Path(__file__).resolve().parents[3] / "data" / "public_samples" / "afdb_abia_roads_2026.json"
 
 

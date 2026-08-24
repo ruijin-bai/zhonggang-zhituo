@@ -1,6 +1,5 @@
 from app.evaluation_runner import evaluate_pipeline_sync
 
-
 SAMPLE = {
     "sample_id": "fixture-1",
     "source_name": "Official procurement notice",

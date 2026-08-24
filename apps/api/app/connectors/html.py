@@ -1,7 +1,7 @@
 from urllib.parse import urlparse
 
-from .base import ConnectorFetchOutcome, ConnectorResult, build_document
 from ..web_fetch import MAX_PAGE_BYTES, extract_page_text, fetch_public_resource
+from .base import ConnectorFetchOutcome, ConnectorResult, build_document
 
 
 class HtmlConnector:

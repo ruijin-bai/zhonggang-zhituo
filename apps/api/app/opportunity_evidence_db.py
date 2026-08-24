@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, event
+from sqlalchemy import DateTime, ForeignKey, Integer, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, Session, mapped_column, with_loader_criteria
 
 from .db import Base, TenantScopedMixin, utc_now

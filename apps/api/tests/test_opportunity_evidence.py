@@ -7,12 +7,22 @@ from sqlalchemy.orm import Session
 
 from app.candidate_pipeline import claim_candidate_processing, process_candidate_document
 from app.connectors.base import ConnectorResult, build_document
-from app.db import Base, OpportunityDraftRecord, OpportunityRecord, OrganizationRecord, SourceRecord, set_tenant_context
+from app.db import (
+    Base,
+    OpportunityDraftRecord,
+    OpportunityRecord,
+    OrganizationRecord,
+    SourceRecord,
+    set_tenant_context,
+)
 from app.discovery import confirm_draft
 from app.document_store import LocalDocumentStore
 from app.intelligence_db import EntityRecord, OpportunityEntityLinkRecord, SourceEntityMentionRecord
 from app.models import ConfirmDraftRequest, ProjectDiscovery, ProjectParty
-from app.opportunity_evidence import attach_candidate_to_opportunity, link_opportunity_source_document
+from app.opportunity_evidence import (
+    attach_candidate_to_opportunity,
+    link_opportunity_source_document,
+)
 from app.opportunity_evidence_db import OpportunitySourceDocumentRecord
 from app.source_archive import archive_connector_result
 

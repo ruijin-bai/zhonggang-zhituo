@@ -1,5 +1,5 @@
-from dataclasses import dataclass, asdict
 import re
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)

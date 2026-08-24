@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import smtplib
+import ssl
 from datetime import timedelta
 from email.message import EmailMessage
 from email.utils import formataddr
 from hashlib import sha256
 from html import escape
-import smtplib
-import ssl
 from typing import Protocol
 from urllib.parse import quote
 from uuid import uuid4
@@ -19,7 +19,6 @@ from .config import Settings, get_settings
 from .db import MembershipRecord, OpportunityRecord, UserRecord, utc_now
 from .pursuit_delivery_db import PursuitReminderDeliveryRecord
 from .pursuit_reminder_db import PursuitReminderRecord
-
 
 ACTIVE_DELIVERY_STATUSES = ("pending", "retry", "processing")
 

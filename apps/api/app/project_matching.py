@@ -9,7 +9,6 @@ from .db import OpportunityDraftRecord
 from .models import DuplicateMatch, ProjectDiscovery
 from .repository import list_opportunities
 
-
 _UNKNOWN_VALUES = {"", "待识别", "待核实", "unknown", "n/a", "na", "none"}
 
 

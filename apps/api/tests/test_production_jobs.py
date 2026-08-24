@@ -3,7 +3,6 @@ from pydantic import ValidationError
 
 from app.config import Settings
 
-
 PROXY_SECRET = "zhituo-ci-proxy-secret-32-characters-minimum"
 
 
