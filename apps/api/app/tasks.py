@@ -12,6 +12,7 @@ from .radar import BatchScanRequest, batch_scan
 from .repository import get_opportunity
 from .strategy import get_strategy
 from .strategy_ai import generate_strategy, red_team
+from .tracked_task import TrackedTask
 
 
 def _json(model):
@@ -24,7 +25,7 @@ def _tenant_session(organization_id: str):
     return session
 
 
-@celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.discovery.scan")
+@celery_app.task(bind=True, base=TrackedTask, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.discovery.scan")
 def discovery_scan_task(self, payload: dict, organization_id: str) -> dict:
     try:
         with _tenant_session(organization_id) as session:
@@ -34,7 +35,7 @@ def discovery_scan_task(self, payload: dict, organization_id: str) -> dict:
         raise RuntimeError("商机发现任务超过软超时限制") from exc
 
 
-@celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.discovery.batch")
+@celery_app.task(bind=True, base=TrackedTask, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.discovery.batch")
 def discovery_batch_task(self, payload: dict, organization_id: str) -> dict:
     try:
         with _tenant_session(organization_id) as session:
@@ -44,7 +45,7 @@ def discovery_batch_task(self, payload: dict, organization_id: str) -> dict:
         raise RuntimeError("批量商机扫描任务超过软超时限制") from exc
 
 
-@celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.source.ingest")
+@celery_app.task(bind=True, base=TrackedTask, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.source.ingest")
 def source_ingest_task(self, payload: dict, organization_id: str) -> dict:
     try:
         with _tenant_session(organization_id) as session:
@@ -54,7 +55,7 @@ def source_ingest_task(self, payload: dict, organization_id: str) -> dict:
         raise RuntimeError("情报抽取任务超过软超时限制") from exc
 
 
-@celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 2}, name="zhituo.opportunity.analyze")
+@celery_app.task(bind=True, base=TrackedTask, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 2}, name="zhituo.opportunity.analyze")
 def opportunity_analyze_task(self, opportunity_id: str, organization_id: str) -> dict:
     try:
         with _tenant_session(organization_id) as session:
@@ -67,7 +68,7 @@ def opportunity_analyze_task(self, opportunity_id: str, organization_id: str) ->
         raise RuntimeError("AI 经营研判任务超过软超时限制") from exc
 
 
-@celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 2}, name="zhituo.strategy.generate")
+@celery_app.task(bind=True, base=TrackedTask, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 2}, name="zhituo.strategy.generate")
 def strategy_generate_task(self, opportunity_id: str, organization_id: str) -> dict:
     try:
         with _tenant_session(organization_id) as session:
@@ -80,7 +81,7 @@ def strategy_generate_task(self, opportunity_id: str, organization_id: str) -> d
         raise RuntimeError("赢标策略生成任务超过软超时限制") from exc
 
 
-@celery_app.task(bind=True, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 2}, name="zhituo.strategy.red_team")
+@celery_app.task(bind=True, base=TrackedTask, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 2}, name="zhituo.strategy.red_team")
 def strategy_red_team_task(self, opportunity_id: str, organization_id: str) -> dict:
     try:
         with _tenant_session(organization_id) as session:
