@@ -1,6 +1,6 @@
 # 中港智拓生产就绪基线
 
-> 智拓按真实企业系统建设。比赛 Demo 只是生产系统的一种演示模式，不再反向决定架构或安全边界。
+> 智拓按真实企业系统建设。比赛 Demo 只是生产系统的一种演示模式，不反向决定架构、安全边界或运维标准。
 
 ## 1. 生产级定义
 
@@ -10,47 +10,54 @@
 
 ### 运行与部署
 
-- FastAPI + PostgreSQL + Redis + Celery；
-- Next.js Web + BFF 信任边界；
-- API / Web 独立生产 Dockerfile；
-- 容器非 root 运行；
-- Docker build context 排除 `.env`、虚拟环境和缓存；
-- 生产强制 Queue 模式，AI/网页抓取等长任务不在 API 进程同步执行；
-- Demo / Development / Production 配置隔离；
-- Liveness：`/api/health/live`；
-- Readiness：`/api/health/ready`，Queue 模式同时检查 PostgreSQL 与 Redis。
+- Next.js Web + BFF；
+- FastAPI API；
+- PostgreSQL；
+- Redis；
+- Celery Worker；
+- Celery Beat；
+- API / Web 独立生产镜像；
+- 非 root、只读文件系统、`no-new-privileges`、`cap_drop: ALL`；
+- `deploy/docker-compose.production.yml` 明确拆分 Web / API / Worker / Beat 四进程；
+- Web 与后端使用独立环境文件；
+- API 不直接映射公网端口；
+- backend 内网与 egress 网络分离；
+- Liveness / Readiness；
+- Demo / Development / Production 配置隔离。
+
+详见 `docs/PRODUCTION_DEPLOYMENT.md`。
 
 ### 身份与权限
 
 - RBAC：viewer / analyst / manager / admin；
 - 生产禁止 `development_header`；
 - 支持 `trusted_proxy` 企业身份网关；
-- 支持直接 OIDC JWT 验签：Issuer / Audience / JWKS；
-- JWT 签名算法限制为 RS/ES 系列；
-- OIDC 身份默认不自动创建业务账号，必须存在有效 User + Membership；
+- 支持 OIDC JWT：Issuer / Audience / JWKS 校验；
+- JWT 签名算法限制；
+- OIDC 用户必须存在有效 User + Membership；
 - 多组织用户必须显式选择 Organization；
-- 认证用户级 Redis 限流按 `organization_id + user_id` 隔离。
+- 认证用户限流按 `organization_id + user_id` 隔离。
 
 ### 多租户隔离
 
 形成两道防线：
 
-1. SQLAlchemy Session 自动 Tenant Scope；
+1. SQLAlchemy Tenant Scope；
 2. PostgreSQL Row Level Security。
 
-核心业务表和后台任务台账均包含 `organization_id`。API / Worker 同时绑定 SQLAlchemy Session 与 PostgreSQL `app.current_organization_id`。
+Opportunity、Evidence、Source、Tracking、Strategy Event、Idempotency Record、Background Job 等业务数据均受租户隔离。
 
-生产数据库必须拆分：
+生产数据库角色拆分：
 
 - `migration_owner`：DDL / Alembic；
-- `runtime_app`：非表 owner，只拥有必要 DML 权限，受 RLS；
-- `backup_reader`：只读备份，可 BYPASSRLS 以保证完整备份。
+- `runtime_app`：API / Worker / Beat，`NOBYPASSRLS`；
+- `backup_reader`：只读备份，可 BYPASSRLS 以获得完整备份。
 
-API / Worker 严禁使用超级用户或 migration owner。
+CI 使用真实非 owner PostgreSQL Role 验证 Opportunity 与 Background Job 的跨租户读取被数据库直接阻断。
 
-### 请求与业务幂等
+### 写入一致性
 
-Queue Job：
+#### Queue Idempotency
 
 - 标准 `Idempotency-Key`；
 - Redis `SET NX` 原子 reservation；
@@ -58,35 +65,28 @@ Queue Job：
 - 重放返回原 Job ID；
 - 入队失败释放 reservation。
 
-同步业务写路径：
+#### 同步业务幂等
 
-- Draft 确认；
-- Watch 更新；
-- Action 创建/完成；
-- Alert 关闭；
-- Strategy 保存。
+Draft 确认、Watch 更新、Action 创建/完成、Alert 关闭、Strategy 保存均使用 PostgreSQL `idempotency_records`。
 
-使用 PostgreSQL `idempotency_records` 持久化请求摘要与响应结果。同 Key + 不同 payload 直接 409；不确定副作用的 pending/failed 请求不会因 TTL 到期被自动重做。
+- 同 Key + 同 payload 返回原结果；
+- 同 Key + 不同 payload 返回 409；
+- pending / failed 的不确定副作用不会自动重做。
 
-### 策略乐观并发
+#### 策略乐观并发
 
-策略工作区已经具备版本控制：
+- Strategy Workspace 返回 `version`；
+- 保存提交 `expected_version`；
+- 同项目写入先锁定 Opportunity；
+- stale version 返回 `409 Conflict`；
+- 后提交者不能静默覆盖他人已保存策略。
 
-- GET 返回 `version`；
-- 保存必须提交 `expected_version`；
-- 同一项目策略写入先锁定 Opportunity 行；
-- 写入前比较当前 Strategy Event 版本；
-- 旧版本写入返回 `409 Conflict`；
-- 后提交者不能静默覆盖其他经营人员已经保存的修改。
+### Durable Background Jobs
 
-当前采用显式 `expected_version` 请求字段；后续 Web 可在编辑器中进一步映射为 ETag / If-Match 用户体验。
+PostgreSQL `background_jobs` 保存长期任务事实：
 
-### Durable Job Ledger / 失败恢复
-
-Celery/Redis 负责实时执行，PostgreSQL `background_jobs` 保存长期任务事实：
-
-- Job Type / Celery Task Name；
-- 提交组织、用户、资源；
+- Job / Job Type / Task；
+- Organization / User / Resource；
 - task args；
 - request_id / correlation_id；
 - queued / running / retrying / succeeded / failed；
@@ -94,177 +94,203 @@ Celery/Redis 负责实时执行，PostgreSQL `background_jobs` 保存长期任�
 - error detail；
 - retry lineage。
 
-Worker 的 before_start / retry / success / failure 自动更新台账。Redis/Celery result 过期后，Job API 可以退回 PostgreSQL 状态。
+Worker 生命周期自动回写台账。Redis/Celery Result 过期后，任务事实仍可追溯。
 
-管理角色可以：
+管理角色支持：
 
 - `GET /api/jobs/failed`；
 - `POST /api/jobs/{job_id}/retry`。
 
-人工重试创建新 Job ID，并保留 `retry_of_job_id`，不篡改原失败记录。可重试 task name 使用代码白名单，不允许用户提交任意 Celery task。
+人工重试生成新 Job 并保留 `retry_of_job_id`，不篡改历史失败记录。
 
-### 可观测性
+### Stuck Job Reconciler
+
+Celery Beat 每 60 秒运行 `zhituo.maintenance.reconcile_stuck_jobs`。
+
+- `running/retrying` 超过 `JOB_STUCK_AFTER_SECONDS` 且长期无状态更新：自动标记 failed，并保留审计原因；
+- `queued` 长期未启动：**只监控和告警，不自动判失败**，避免把容量不足误判为任务失败；
+- Reconciler 按 Organization 逐租户建立 Session/RLS 上下文，不使用 BYPASSRLS。
+
+### 可观测性与 SLO
+
+已具备：
 
 - `X-Request-ID`；
 - `X-Correlation-ID`；
 - JSON 结构化日志；
-- HTTP status / duration_ms；
-- organization_id / user_id；
-- Job metadata 与 Durable Job Ledger 贯穿 correlation 信息；
-- 外部传入 ID 只有满足安全字符集和长度才被接受。
+- HTTP status / duration；
+- Organization / User / Job 链路上下文；
+- Prometheus `/internal/metrics`，默认关闭；
+- 生产启用指标必须配置独立 `METRICS_TOKEN`；
+- HTTP route 使用模板 label，避免具体 Opportunity/Job ID 造成高基数；
+- PostgreSQL / Redis health；
+- DB pool 指标；
+- Job queue latency；
+- Job duration；
+- failure / retry / stuck / stale queued 指标。
+
+首版 SLO 与告警规则：
+
+- `docs/SLO_AND_MONITORING.md`；
+- `ops/prometheus/alerts.yml`。
+
+首版目标包括 API 99.5% 月度可用性、非异步 API P95 < 1s、Job queue P95 < 30s、Job 失败率 < 5% 等；上线 30 天后根据真实数据校准。
 
 ### HTTP 安全边界
 
-应用层已具备：
-
-- 请求体大小限制；
-- `X-Content-Type-Options: nosniff`；
+- 请求体限制；
+- HSTS；
+- nosniff；
 - `X-Frame-Options: DENY`；
-- `Referrer-Policy: no-referrer`；
-- Permissions-Policy；
-- Cross-Origin-Resource-Policy；
+- no-referrer；
+- Permissions Policy；
+- Cross-Origin Resource Policy；
 - `Cache-Control: no-store`；
-- Production HSTS；
-- 生产隐藏 `/docs`、`/redoc`、`/openapi.json`；
+- Production 隐藏 Swagger/OpenAPI；
 - 认证用户 Redis 限流。
 
-Ingress/WAF 仍必须独立实现 TLS、未认证流量限流、源 IP/网络策略和第一层请求体限制。
+Ingress/WAF 仍负责 TLS、未认证流量限流、IP/网络策略与第一层请求限制。
 
 ### 备份与恢复
 
-已提供：
-
-- `ops/postgres/backup.sh`；
-- `ops/postgres/restore.sh`；
-- custom-format backup；
+- PostgreSQL custom-format backup；
 - SHA-256 校验；
+- 显式恢复确认；
 - restore 后 Alembic 状态检查；
-- `docs/OPERATIONS_RUNBOOK.md`。
+- CI 实际执行 `pg_dump → 新数据库 → pg_restore → 数据抽查`；
+- `docs/OPERATIONS_RUNBOOK.md` 定义恢复演练、RPO/RTO 与事故处置。
 
-CI 会实际执行 `pg_dump → 新数据库 → pg_restore → 数据抽查`。
+### 软件供应链
 
-## 3. CI/CD 上线门禁
+CI 已加入：
 
-主线要求：
+- Python `pip-audit`；
+- Web `npm audit --omit=dev --audit-level=high`；
+- Python CycloneDX SBOM；
+- Web CycloneDX SBOM；
+- SBOM Workflow Artifact；
+- High severity Web 依赖漏洞已推动 Next.js 从 16.2.11 升至 16.3.2；
+- 生产 Compose 静态解析门禁；
+- API/Web production image build。
+
+Web lockfile 正在通过 CI 固化，完成后 Web CI、Security 与 Docker build 将统一切换为 `npm ci`。
+
+## 3. 当前 CI/CD 门禁
+
+主线至少验证：
 
 1. Web TypeScript check；
 2. Web production build；
-3. Python 安装 + `pip check`；
+3. Python install + `pip check`；
 4. Python compileall；
-5. 运维脚本语法校验；
-6. Clean PostgreSQL `alembic upgrade head`；
-7. 最新 migration `downgrade -1 → upgrade head`；
-8. runtime / backup 数据库角色权限验证；
+5. 运维 Shell 语法；
+6. Clean PostgreSQL migration；
+7. latest migration downgrade/re-upgrade；
+8. runtime / backup DB role 权限；
 9. Redis connectivity；
-10. pytest；
-11. PostgreSQL Opportunity RLS 真实非 owner 测试；
-12. PostgreSQL Background Job RLS 真实非 owner 测试；
-13. strategy concurrency / business idempotency / tracing / security tests；
-14. repeatable demo seed / CLI smoke；
-15. PostgreSQL 17 backup / restore 演练；
-16. API production image build + import smoke；
-17. Web production image build；
-18. 最终发布 `zhituo/ci-gate` commit status。
+10. unit / integration / PostgreSQL RLS tests；
+11. strategy concurrency / business idempotency / tracing / security tests；
+12. repeatable demo seed / CLI smoke；
+13. PostgreSQL 17 backup/restore drill；
+14. production Compose config validation；
+15. API production image build + import smoke；
+16. Web production image build；
+17. Python vulnerability audit；
+18. Web high-severity vulnerability audit；
+19. Python/Web SBOM generation；
+20. `zhituo/ci-gate` 标准 commit status。
 
-以后可通过标准 GitHub commit status 直接判断主线最终门禁结果，无需人工截图 Actions 日志。
+后续开发由 `zhituo/ci-gate` 作为主线最终结果，不再依赖人工截图 Actions 日志。
 
-## 4. 生产环境最小配置
+## 4. 生产环境关键配置
 
 ```bash
 APP_ENV=production
+DATA_BACKEND=database
 DEMO_MODE=false
 ALLOW_DEMO_FALLBACK=false
-NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=false
-DATA_BACKEND=database
 DATABASE_RLS_ENABLED=true
 JOB_MODE=queue
-DATABASE_URL=postgresql+psycopg://<runtime-user>:<secret>@<production-db>/zhituo
-REDIS_URL=redis://<production-redis>:6379/0
-CORS_ORIGINS=https://<official-domain>
+DATABASE_URL=postgresql+psycopg://<runtime_app>:<secret>@<db>/zhituo
+REDIS_URL=redis://<redis>/0
+CELERY_TASK_SOFT_TIME_LIMIT_SECONDS=90
+CELERY_TASK_TIME_LIMIT_SECONDS=120
+JOB_STUCK_AFTER_SECONDS=300
 IDEMPOTENCY_TTL_SECONDS=86400
 AUTHENTICATED_RATE_LIMIT_PER_MINUTE=300
 MAX_REQUEST_BODY_BYTES=2000000
-LOG_LEVEL=INFO
+METRICS_ENABLED=true
+METRICS_TOKEN=<secret-manager-injected-min-32-chars>
 ```
 
-身份二选一：
+身份采用：
 
 ```bash
 AUTH_MODE=trusted_proxy
-AUTH_PROXY_SECRET=<secret-manager-injected-min-32-chars>
+AUTH_PROXY_SECRET=<secret>
 ```
 
-或：
+或 OIDC：
 
 ```bash
 AUTH_MODE=oidc
 OIDC_ISSUER=https://id.example.com/
 OIDC_AUDIENCE=zhituo-api
 OIDC_JWKS_URL=https://id.example.com/.well-known/jwks.json
-OIDC_EMAIL_CLAIM=email
 ```
 
 ## 5. 下一阶段 P0
 
-### Secret / 部署平台集成
+### Secret Manager / KMS 落地
 
-仓库已经定义 Secret 契约，但正式部署仍需接实际 Secret Manager / KMS，并建立：
+仓库已经定义 Secret 契约，下一步需要与最终部署平台结合：
 
-- Secret 轮换；
-- 最小读取权限；
-- 环境隔离；
-- 审计；
-- 数据库 runtime / migration / backup 三套凭据。
+- runtime / migration / backup 三类数据库凭据；
+- Redis；
+- OIDC / trusted proxy；
+- AI Provider；
+- Metrics；
+- Secret 轮换、最小读取权限、审计和环境隔离。
 
-### 指标、SLO 与告警
+### 软件供应链进一步加固
 
-继续补：
-
-- API P50 / P95 / P99；
-- Worker queue latency；
-- Job failure / retry / stuck rate；
-- AI provider latency / failure；
-- PostgreSQL pool saturation；
-- Redis error rate；
-- RLS / 403 / 409 / 429 异常增长；
-- Error tracking；
-- SLO Dashboard。
-
-### 数据保留与 Stuck Job Reconciliation
-
-Durable Job Ledger 已解决“任务历史消失”和“失败可人工重试”，下一步还需：
-
-- Job Ledger 保留/归档策略；
-- running 超时扫描；
-- Worker 异常退出后的 stuck job reconciliation；
-- Dead Letter Dashboard。
-
-## 6. P1 稳定运营
-
-- Dependency lock；
+- 提交并强制使用 Web lockfile；
+- Python 依赖锁；
 - 自动依赖更新；
-- SCA / CVE 扫描；
-- SBOM；
-- 镜像签名；
-- Audit 查询与导出；
-- 零停机迁移规范；
+- 容器 CVE 扫描；
+- 镜像 digest 固定；
+- 镜像签名与 provenance。
+
+### 零停机迁移与发布
+
+- Expand / Migrate / Contract migration 规范；
+- 部署前兼容窗口；
+- DB migration 与 runtime image 解耦；
+- Canary / rolling deployment；
+- 自动 rollback 条件；
+- 发布后 smoke / SLO gate。
+
+### 容量与告警治理
+
+- 30 天真实 SLO 基线；
+- Worker concurrency / autoscaling；
+- DB pool saturation；
+- Redis capacity；
+- AI Provider latency / failure 指标；
+- 告警路由和值班策略。
+
+## 6. 后续企业级扩展
+
+- Audit 查询/导出 UI；
+- Failed/Dead Letter Job 管理 UI；
 - 组织/成员权限管理 UI；
-- 失败任务管理 UI；
-- SLO 告警值班机制。
-
-## 7. P2 企业级扩展
-
-- 企业知识库 / 历史项目接入；
-- 国别 / 客户 / 竞争对手主数据治理；
-- CRM / OA / 邮件 / 企业消息集成；
+- 企业知识库 / 历史项目；
+- CRM / OA / 邮件集成；
 - Prompt / Schema / Model version governance；
 - AI 成本治理；
 - PostgreSQL / Redis 高可用；
-- 多实例 Worker；
-- 灾备环境与跨区域恢复。
+- 跨区域灾备。
 
-## 8. 当前架构原则
+## 7. 当前架构原则
 
-> **身份必须可验证，租户必须双层隔离，写操作必须可幂等且防覆盖，长任务必须异步且有持久台账，失败必须可恢复，部署必须经过自动门禁。**
-
-后续任何新 AI 功能只有满足这些生产约束后才进入主产品路径。
+> **身份必须可验证，租户必须双层隔离，写操作必须可幂等且防覆盖，长任务必须异步且有持久台账，未知状态不擅自改写事实，失败必须可恢复，运行必须可观测，部署必须经过自动安全门禁。**
