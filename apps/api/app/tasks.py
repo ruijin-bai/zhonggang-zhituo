@@ -4,6 +4,11 @@ from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import select
 
 from .ai import AIService
+from .candidate_pipeline import (
+    claim_candidate_processing,
+    process_candidate_document,
+    release_candidate_dispatch_claim,
+)
 from .celery_app import celery_app
 from .db import OrganizationRecord, SessionLocal, set_tenant_context
 from .discovery import discover
@@ -34,13 +39,18 @@ def _tenant_session(organization_id: str):
     return session
 
 
+def _active_organization_ids() -> list[str]:
+    with SessionLocal() as control_session:
+        return list(
+            control_session.scalars(
+                select(OrganizationRecord.id).where(OrganizationRecord.is_active.is_(True))
+            ).all()
+        )
+
+
 @celery_app.task(name="zhituo.maintenance.reconcile_stuck_jobs")
 def reconcile_stuck_jobs_task() -> dict:
-    with SessionLocal() as control_session:
-        organization_ids = control_session.scalars(
-            select(OrganizationRecord.id).where(OrganizationRecord.is_active.is_(True))
-        ).all()
-
+    organization_ids = _active_organization_ids()
     reconciled: list[str] = []
     stale_queued = 0
     for organization_id in organization_ids:
@@ -57,11 +67,7 @@ def reconcile_stuck_jobs_task() -> dict:
 
 @celery_app.task(name="zhituo.sources.dispatch_due_scans")
 def dispatch_due_source_scans_task() -> dict:
-    with SessionLocal() as control_session:
-        organization_ids = control_session.scalars(
-            select(OrganizationRecord.id).where(OrganizationRecord.is_active.is_(True))
-        ).all()
-
+    organization_ids = _active_organization_ids()
     claimed = 0
     dispatched = 0
     dispatch_failures: list[dict] = []
@@ -108,6 +114,59 @@ def source_subscription_scan_task(
                 session,
                 subscription_id,
                 manual=manual,
+                lease_token=lease_token,
+            )
+        )
+        return _json(result)
+
+
+@celery_app.task(name="zhituo.candidates.dispatch_pending")
+def dispatch_pending_candidates_task() -> dict:
+    organization_ids = _active_organization_ids()
+    claimed = 0
+    dispatched = 0
+    dispatch_failures: list[dict] = []
+    for organization_id in organization_ids:
+        with _tenant_session(organization_id) as session:
+            claims = claim_candidate_processing(session)
+        claimed += len(claims)
+        for processing_id, lease_token in claims:
+            try:
+                process_candidate_document_task.apply_async(
+                    args=(processing_id, organization_id, lease_token),
+                    headers={"organization_id": organization_id},
+                )
+                dispatched += 1
+            except Exception as exc:
+                with _tenant_session(organization_id) as session:
+                    release_candidate_dispatch_claim(
+                        session,
+                        processing_id,
+                        str(exc),
+                        lease_token=lease_token,
+                    )
+                dispatch_failures.append(
+                    {"processing_id": processing_id, "error": str(exc)[:500]}
+                )
+    return {
+        "organizations_scanned": len(organization_ids),
+        "claimed": claimed,
+        "dispatched": dispatched,
+        "dispatch_failures": dispatch_failures,
+    }
+
+
+@celery_app.task(name="zhituo.candidates.process_document")
+def process_candidate_document_task(
+    processing_id: str,
+    organization_id: str,
+    lease_token: str,
+) -> dict:
+    with _tenant_session(organization_id) as session:
+        result = asyncio.run(
+            process_candidate_document(
+                session,
+                processing_id,
                 lease_token=lease_token,
             )
         )
