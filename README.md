@@ -24,6 +24,9 @@
 - HTML / RSS / Atom / PDF Source Connector；
 - 内容寻址 DocumentStore（Local + S3-compatible）；
 - SourceFetch / SourceDocument 版本、去重和抓取观察历史；
+- SourceSubscription / SourceScanRun 持续来源监测；
+- ETag / Last-Modified 条件抓取与 304 增量扫描；
+- 扫描租约 fencing token、失败指数退避、自动暂停与人工恢复；
 - RBAC + Organization + OIDC / trusted proxy；
 - SQLAlchemy Tenant Scope + PostgreSQL RLS 双层租户隔离；
 - 写操作幂等、策略乐观并发、持久化后台任务台账和人工重试；
@@ -47,9 +50,9 @@
 
 针对重点机会形成客户诉求、竞争策略、伙伴策略、差异化主张、红队挑战和下一步责任行动。
 
-## Source Intake & Archive
+## Source Intake, Archive & Monitoring
 
-Production Alpha 已从“人工粘贴 URL”推进到统一外部情报接入与原件归档。
+Production Alpha 已从“人工粘贴 URL”推进到统一外部情报接入、原件归档和持续来源监测。
 
 首批 Connector：
 
@@ -62,6 +65,10 @@ Production Alpha 已从“人工粘贴 URL”推进到统一外部情报接入�
 抓取后进入 DocumentStore：开发环境可使用 Local Store，生产环境强制 S3-compatible Object Storage。原件和规范文本均以 SHA-256 内容寻址，相同字节不重复保存；PostgreSQL 保存 `source_fetches / source_documents` 版本关系、首次/最近观察时间和出现次数。
 
 同一 URL 同一内容再次出现只更新观察历史；内容发生变化才保留为新版本。RSS/Atom 一个 Feed 可产生多条规范文档，但原始 Feed 只存一份。
+
+持续监测通过 `source_subscriptions` 保存来源配置、扫描周期、ETag / Last-Modified、健康状态和下一次扫描时间；`source_scan_runs` 保存每次扫描历史。Beat 只负责认领到期来源，实际网络抓取由独立 Worker 完成。
+
+为防止 Worker 延迟或重启造成重复覆盖，每次认领同时写入 `lease_until + lease_token`。旧任务如果租约已经被新 Worker 接管，即使之后才启动，也只能返回 stale claim，不能清除新租约或覆盖新结果。连续失败按指数退避，达到阈值后自动暂停，等待人工检查和恢复。
 
 外部下载沿用公开 URL 安全校验，并采用流式读取和体积上限，避免把无限响应直接读入内存。PDF 当前只处理存在文本层的文档；扫描件明确进入后续 OCR 管线，而不是静默产生低质量事实。
 
@@ -77,10 +84,16 @@ Next.js Web / BFF
 FastAPI Application
   ├─ Market / Opportunity / Strategy / Tracking
   ├─ Auth / RBAC / Audit
+  ├─ Source Subscription Management
   ├─ Source Connector Registry
   └─ Job Dispatcher
        ↓
 Redis → Celery Worker / Beat
+       │        └─ claim due SourceSubscription
+       ↓
+Conditional Source Fetch
+  ├─ If-None-Match / If-Modified-Since
+  └─ 304 → health only, no duplicate archive
        ↓
 Source Connector → DocumentStore
                    ├─ raw/sha256/...   原始 HTML / XML / PDF
@@ -88,9 +101,10 @@ Source Connector → DocumentStore
 
 PostgreSQL
 ├─ 结构化经营事实 / RLS
-└─ SourceFetch / SourceDocument 版本索引
+├─ SourceFetch / SourceDocument 版本索引
+└─ SourceSubscription / SourceScanRun 健康与扫描历史
 
-Search / Entity Layer（后续）
+Candidate / Entity / Search Layer（后续）
 ```
 
 短期坚持**模块化单体 + 独立 Worker**，不为了形式上的“生产级”过早微服务化。
@@ -103,6 +117,7 @@ Search / Entity Layer（后续）
 4. **正式机会必须人工确认**：自动发现先进入 Draft，确认后才进入正式机会池。
 5. **生产故障显式失败**：Production 禁止静默回退 Demo 数据。
 6. **原件不可变、索引可演进**：外部原始字节按哈希保存，后续抽取规则和 AI 模型可以重新计算。
+7. **调度必须可恢复**：周期任务使用持久化健康状态、租约和 fencing token，不把可靠性寄托在 Celery 内存状态上。
 
 ## 本地开发
 
@@ -130,18 +145,17 @@ uv run zhituo-api seed
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-开发环境默认把归档原件写入 `./data/objects`；生产环境必须配置 S3-compatible DocumentStore。详细说明见 [DEVELOPMENT.md](DEVELOPMENT.md) 和 [.env.example](.env.example)。
+持续扫描还需启动 Worker 与 Beat。开发环境默认把归档原件写入 `./data/objects`；生产环境必须配置 S3-compatible DocumentStore。详细说明见 [DEVELOPMENT.md](DEVELOPMENT.md) 和 [.env.example](.env.example)。
 
 ## 当前下一阶段
 
 Production Alpha 下一大步按以下顺序推进：
 
-1. **Scheduled Source Scan**：来源订阅、周期扫描、ETag / Last-Modified 增量抓取、Source Health；
-2. **Candidate Pipeline**：新增文档版本 → 项目识别 → 候选机会 → 人工确认；
-3. **Entity Resolution**：客户、融资方、竞争对手、合作伙伴独立实体化；
-4. **Search / Knowledge Layer**：跨项目、客户、国别和历史经营知识检索；
-5. **真实 Action / Reminder / Approval**：把经营建议推进为多人协同工作流；
-6. **OCR / 高成本连接器**：在核心闭环稳定后再接扫描 PDF、浏览器自动化和登录态来源。
+1. **Candidate Pipeline**：新增文档版本 → 项目识别 → 候选机会 → 人工确认；
+2. **Entity Resolution**：客户、融资方、竞争对手、合作伙伴独立实体化；
+3. **Search / Knowledge Layer**：跨项目、客户、国别和历史经营知识检索；
+4. **真实 Action / Reminder / Approval**：把经营建议推进为多人协同工作流；
+5. **OCR / 高成本连接器**：在核心闭环稳定后再接扫描 PDF、浏览器自动化和登录态来源。
 
 ## 核心文档
 
