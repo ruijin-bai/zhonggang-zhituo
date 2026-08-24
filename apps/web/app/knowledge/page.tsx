@@ -95,15 +95,15 @@ function CandidateCard({ item }: { item: CandidateItem }) {
       <div className={styles.snippet}>{item.discovery.summary}</div>
       <div className={styles.candidateMeta}>
         <div className={styles.metric}>来源 <strong>{item.source_count}</strong></div>
-        <div className={styles.metric}>主体 <strong>{item.entities.length}</strong></div>
+        <div className={styles.metric}>主体角色 <strong>{item.entities.length}</strong></div>
         <div className={styles.metric}>业主 <strong>{item.discovery.owner}</strong></div>
         <div className={styles.metric}>疑似正式机会 <strong>{item.duplicate_matches.length}</strong></div>
       </div>
       {item.entities.length ? (
         <div className={styles.matched}>
           {item.entities.slice(0, 5).map((entity) => (
-            <Link className={styles.roleBadge} href={`/knowledge/entities/${encodeURIComponent(entity.entity_id)}`} key={entity.entity_id}>
-              {entity.name} · {entity.roles.join("/")}
+            <Link className={styles.roleBadge} href={`/knowledge/entities/${encodeURIComponent(entity.id)}`} key={`${entity.id}-${entity.role}`}>
+              {entity.name} · {entity.role}
             </Link>
           ))}
         </div>
