@@ -38,6 +38,8 @@ def test_production_accepts_explicit_queue_services() -> None:
     assert settings.auth_mode == "trusted_proxy"
     assert settings.document_store_backend == "s3"
     assert settings.source_scan_lease_seconds > settings.celery_task_time_limit_seconds
+    assert settings.candidate_lease_seconds > settings.celery_task_time_limit_seconds
+    assert 0.75 <= settings.candidate_draft_duplicate_threshold <= 0.99
 
 
 def test_production_rejects_local_document_storage() -> None:
@@ -66,4 +68,26 @@ def test_source_scan_minimum_interval_rejects_hot_loop() -> None:
     values = _production_values()
     values["source_scan_min_interval_seconds"] = 30
     with pytest.raises(ValidationError, match="SOURCE_SCAN_MIN_INTERVAL_SECONDS"):
+        Settings(**values)
+
+
+def test_candidate_lease_must_exceed_worker_hard_timeout() -> None:
+    values = _production_values()
+    values["celery_task_time_limit_seconds"] = 180
+    values["candidate_lease_seconds"] = 180
+    with pytest.raises(ValidationError, match="CANDIDATE_LEASE_SECONDS"):
+        Settings(**values)
+
+
+def test_candidate_duplicate_threshold_rejects_unsafe_low_value() -> None:
+    values = _production_values()
+    values["candidate_draft_duplicate_threshold"] = 0.6
+    with pytest.raises(ValidationError, match="CANDIDATE_DRAFT_DUPLICATE_THRESHOLD"):
+        Settings(**values)
+
+
+def test_candidate_attempt_limit_is_bounded() -> None:
+    values = _production_values()
+    values["candidate_max_attempts"] = 0
+    with pytest.raises(ValidationError, match="CANDIDATE_MAX_ATTEMPTS"):
         Settings(**values)
