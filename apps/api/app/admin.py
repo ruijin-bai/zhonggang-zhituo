@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .briefing_api import router as briefing_router
 from .candidate_api import router as candidate_router
 from .db import AuditLogRecord, get_db
 from .entity_api import router as entity_router
@@ -19,6 +20,7 @@ router.include_router(source_monitoring_router)
 router.include_router(candidate_router)
 router.include_router(entity_router)
 router.include_router(search_router)
+router.include_router(briefing_router)
 
 
 class MeResponse(BaseModel):
