@@ -9,7 +9,7 @@
 - `worker`：Celery Worker；
 - `beat`：Celery Beat，仅负责周期调度。
 
-PostgreSQL、Redis、Ingress/WAF、Prometheus/Alertmanager 建议由独立基础设施提供，不与应用容器绑定生命周期。
+PostgreSQL、Redis、S3-compatible Object Storage、Ingress/WAF、Prometheus/Alertmanager 建议由独立基础设施提供，不与应用容器绑定生命周期。
 
 示例编排：`deploy/docker-compose.production.yml`。
 
@@ -18,10 +18,10 @@ PostgreSQL、Redis、Ingress/WAF、Prometheus/Alertmanager 建议由独立基础
 - API 不映射宿主机公网端口；
 - Web 仅绑定 `127.0.0.1`，由宿主机反向代理/WAF 提供 TLS 与公网入口；
 - Web 与 API 通过 `backend` 内部网络通信；
-- API / Worker / Beat 同时加入独立 `egress` 网络，以访问 OIDC JWKS、AI Provider 和经批准的公开情报源；
+- API / Worker / Beat 同时加入独立 `egress` 网络，以访问 OIDC JWKS、AI Provider、Object Storage 和经批准的公开情报源；
 - 正式云环境应进一步使用 Egress Policy / Firewall 限制允许访问的外部域名和端口。
 
-## 3. Secret 最小权限
+## 3. Secret 与工作负载身份
 
 API/Worker/Beat 使用同一类后端运行 Secret，包括：
 
@@ -30,6 +30,8 @@ API/Worker/Beat 使用同一类后端运行 Secret，包括：
 - OIDC / trusted-proxy 配置；
 - AI Provider credential；
 - Metrics token（仅 API 实际使用，容器平台可进一步拆分）。
+
+Object Storage 优先使用云平台 workload identity / instance role。若平台只能注入静态 S3 credential，也必须通过 Secret Manager 注入标准 AWS SDK 环境变量，不新增智拓自定义 Access Key 配置，更不能提交到仓库。
 
 Web 使用独立环境文件，只应包含 BFF 所需配置，例如：
 
@@ -40,7 +42,7 @@ API_TRUSTED_PROXY_SECRET=<secret>
 NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=false
 ```
 
-**Web 不应获得 DATABASE_URL、Redis 凭据或 AI Provider Key。**
+**Web 不应获得 DATABASE_URL、Redis 凭据、Object Storage credential 或 AI Provider Key。**
 
 正式环境不要把 `.env.production` 提交到仓库；由 Secret Manager/KMS/平台 Secret 注入。
 
@@ -55,6 +57,21 @@ JOB_MODE=queue
 DATABASE_RLS_ENABLED=true
 DATABASE_URL=postgresql+psycopg://<runtime_app>:<secret>@<db>/zhituo
 REDIS_URL=redis://<redis>/0
+
+DOCUMENT_STORE_BACKEND=s3
+DOCUMENT_STORE_S3_BUCKET=zhituo-production-documents
+DOCUMENT_STORE_S3_REGION=<region>
+DOCUMENT_STORE_S3_ENDPOINT_URL=
+DOCUMENT_STORE_S3_FORCE_PATH_STYLE=false
+DOCUMENT_STORE_S3_SSE=AES256
+
+SOURCE_SCAN_DISPATCH_INTERVAL_SECONDS=60
+SOURCE_SCAN_MIN_INTERVAL_SECONDS=300
+SOURCE_SCAN_LEASE_SECONDS=300
+SOURCE_SCAN_MAX_BACKOFF_SECONDS=86400
+SOURCE_SCAN_AUTO_PAUSE_FAILURES=8
+SOURCE_SCAN_DISPATCH_BATCH_SIZE=50
+
 AUTHENTICATED_RATE_LIMIT_PER_MINUTE=300
 CELERY_TASK_SOFT_TIME_LIMIT_SECONDS=90
 CELERY_TASK_TIME_LIMIT_SECONDS=120
@@ -63,7 +80,9 @@ METRICS_ENABLED=true
 METRICS_TOKEN=<secret-manager-injected-min-32-chars>
 ```
 
-身份采用 `trusted_proxy` 或 `oidc`，生产禁止 `development_header`。
+身份采用 `trusted_proxy` 或 `oidc`，生产禁止 `development_header`。自定义 S3-compatible endpoint 在 production 必须使用 HTTPS；若使用 `aws:kms`，同时配置 `DOCUMENT_STORE_S3_KMS_KEY_ID`。
+
+`SOURCE_SCAN_LEASE_SECONDS` 必须严格大于 `CELERY_TASK_TIME_LIMIT_SECONDS`。扫描租约使用 fencing token，即使旧 Worker 因队列延迟在租约过期后才启动，也不能覆盖后续 Worker 的状态。
 
 ## 5. Worker 与 Beat
 
@@ -81,7 +100,28 @@ celery -A app.celery_app.celery_app beat --loglevel=INFO --schedule=/tmp/celeryb
 
 Beat 不能和 API 进程混跑。多副本部署时只能存在一个有效 Beat 调度器，或改用具有分布式锁的调度方案。
 
-## 6. 容器安全基线
+Beat 不直接抓网页。它周期运行 `zhituo.sources.dispatch_due_scans`，按 Organization 认领到期 `SourceSubscription`，随后每个来源分别派发 `zhituo.sources.scan_subscription` Worker Task。网络抓取、304 处理、Object Storage 归档和健康状态更新均在 Worker 中执行。
+
+## 6. Source Monitoring 运行保障
+
+持续来源监测依赖 PostgreSQL 中的长期状态，而不是依赖 Celery Result：
+
+- `source_subscriptions`：周期、下一次扫描、ETag、Last-Modified、健康、租约；
+- `source_scan_runs`：每次扫描结果和错误历史；
+- `source_fetches / source_documents`：真实内容版本；
+- Object Storage：不可变原件与规范文本。
+
+上线后应至少验证：
+
+1. 新订阅能够被唯一 Beat 认领；
+2. Worker 完成后 `lease_until / lease_token` 被清除；
+3. 支持 ETag 的来源第二次扫描可出现 `not_modified`；
+4. 连续失败会指数退避而非每分钟重打上游；
+5. 达到阈值后来源自动暂停；
+6. manager 可以恢复并立即重新扫描；
+7. 其他 Organization 无法读取该订阅和扫描历史。
+
+## 7. 容器安全基线
 
 示例 Compose 已启用：
 
@@ -95,7 +135,9 @@ Beat 不能和 API 进程混跑。多副本部署时只能存在一个有效 Bea
 
 生产镜像应使用不可变 digest，而不是长期使用 `latest`。
 
-## 7. 数据库角色
+注意：Production DocumentStore 为外部 S3-compatible 服务，因此 API/Worker 容器不需要通过可写本地卷保存正式来源原件。
+
+## 8. 数据库角色
 
 - `migration_owner`：仅部署迁移；
 - `runtime_app`：API / Worker / Beat，`NOBYPASSRLS`；
@@ -103,17 +145,21 @@ Beat 不能和 API 进程混跑。多副本部署时只能存在一个有效 Bea
 
 运行容器严禁使用 migration owner 或 PostgreSQL superuser。
 
-## 8. 上线顺序
+每次新增表并执行 Alembic 迁移后，都需要重新运行 `ops/postgres/provision_runtime_role.sql`，确保 runtime role 获得新表 DML 权限；RLS 仍是租户隔离的最终数据库边界。
+
+## 9. 上线顺序
 
 1. 备份当前数据库；
 2. 使用 migration owner 执行 `alembic upgrade head`；
 3. 重新执行 runtime role grant 脚本，确保新表权限完整；
-4. 启动 API；
-5. Readiness 通过；
-6. 启动 Worker；
-7. 启动唯一 Beat；
-8. 启动 Web；
-9. 接入反向代理流量；
-10. 验证 `/internal/metrics`、Prometheus Target 和告警规则；
-11. 执行一次异步任务 smoke test；
-12. 观察错误率、队列延迟和数据库连接池后再扩大流量。
+4. 验证 S3 Bucket、SSE/KMS 与 workload identity；
+5. 启动 API；
+6. Readiness 通过；
+7. 启动 Worker；
+8. 启动唯一 Beat；
+9. 启动 Web；
+10. 接入反向代理流量；
+11. 验证 `/internal/metrics`、Prometheus Target 和告警规则；
+12. 执行一次普通异步任务 smoke test；
+13. 创建一个测试 SourceSubscription，并验证首次 changed/unchanged 与后续 304/健康历史；
+14. 观察错误率、队列延迟、来源失败率和数据库连接池后再扩大流量。
