@@ -5,11 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .audit import write_audit
+from .business_idempotency import begin_operation, complete_operation, fail_operation
 from .candidate_db import CandidateProcessingRecord
 from .candidate_pipeline import list_candidate_processing
 from .db import OpportunityDraftRecord, get_db, utc_now
 from .intelligence import candidate_intelligence_summary
 from .models import ProjectDiscovery
+from .opportunity_evidence import attach_candidate_to_opportunity
 from .security import Principal, require_role
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
@@ -53,7 +55,7 @@ def _processing_by_draft(session: Session, draft_ids: list[str]) -> dict[str, Ca
 
 @router.get("")
 def candidate_inbox(
-    status: str = Query(default="pending", pattern="^(pending|confirmed|rejected|all)$"),
+    status: str = Query(default="pending", pattern="^(pending|confirmed|rejected|linked|all)$"),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
     principal: Principal = Depends(require_role("viewer")),
@@ -88,6 +90,53 @@ def candidate_detail(
         select(CandidateProcessingRecord).where(CandidateProcessingRecord.draft_id == draft_id)
     )
     return _draft_to_dict(row, processing, db)
+
+
+@router.post("/{draft_id}/attach/{opportunity_id}")
+def attach_candidate_evidence(
+    draft_id: str,
+    opportunity_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_role("manager")),
+) -> dict:
+    handle = begin_operation(
+        db,
+        organization_id=principal.organization_id,
+        scope=f"candidate.attach:{draft_id}:{opportunity_id}",
+        raw_key=request.headers.get("Idempotency-Key"),
+        request_payload={"draft_id": draft_id, "opportunity_id": opportunity_id},
+    )
+    if handle.is_replay:
+        return handle.replay_payload
+    try:
+        result = attach_candidate_to_opportunity(
+            db,
+            draft_id=draft_id,
+            opportunity_id=opportunity_id,
+        )
+        write_audit(
+            db,
+            principal=principal,
+            action="candidate.attach_as_evidence",
+            resource_type="opportunity",
+            resource_id=opportunity_id,
+            request=request,
+            details={
+                "draft_id": draft_id,
+                "attached_count": result["attached_count"],
+                "source_document_count": result["source_document_count"],
+            },
+        )
+        db.commit()
+        complete_operation(db, handle, result)
+        return result
+    except ValueError as exc:
+        fail_operation(db, handle, str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        fail_operation(db, handle, type(exc).__name__)
+        raise
 
 
 @router.post("/{draft_id}/reject")
