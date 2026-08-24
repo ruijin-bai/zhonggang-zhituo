@@ -172,10 +172,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Audit Web production dependencies
+      - name: Resolve, lock and audit Web production dependencies
         working-directory: apps/web
         run: |
-          npm install
+          npm install --package-lock=true
+          test -s package-lock.json
           npm audit --omit=dev --audit-level=high
       - name: Generate Web CycloneDX SBOM
         working-directory: apps/web
