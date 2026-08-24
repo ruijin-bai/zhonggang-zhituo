@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .audit import write_audit
-from .db import get_db
+from .db import OpportunityRecord, get_db
 from .entity_management import add_manual_alias
 from .intelligence import entity_detail, list_entities
 from .security import Principal, require_role
@@ -36,6 +37,28 @@ def entity_read(
     result = entity_detail(db, entity_id)
     if result is None:
         raise HTTPException(status_code=404, detail="entity not found")
+
+    opportunity_ids = [item["opportunity_id"] for item in result["opportunities"]]
+    opportunities = {}
+    if opportunity_ids:
+        rows = db.scalars(
+            select(OpportunityRecord).where(OpportunityRecord.id.in_(opportunity_ids))
+        ).all()
+        opportunities = {row.id: row for row in rows}
+
+    for item in result["opportunities"]:
+        opportunity = opportunities.get(item["opportunity_id"])
+        if opportunity is None:
+            item.update({"title": item["opportunity_id"], "country": None, "sector": None, "stage": None})
+        else:
+            item.update(
+                {
+                    "title": opportunity.title,
+                    "country": opportunity.country,
+                    "sector": opportunity.sector,
+                    "stage": opportunity.stage,
+                }
+            )
     return result
 
 
