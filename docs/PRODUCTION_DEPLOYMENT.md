@@ -72,6 +72,13 @@ SOURCE_SCAN_MAX_BACKOFF_SECONDS=86400
 SOURCE_SCAN_AUTO_PAUSE_FAILURES=8
 SOURCE_SCAN_DISPATCH_BATCH_SIZE=50
 
+CANDIDATE_DISPATCH_INTERVAL_SECONDS=30
+CANDIDATE_LEASE_SECONDS=300
+CANDIDATE_MAX_ATTEMPTS=5
+CANDIDATE_MAX_BACKOFF_SECONDS=3600
+CANDIDATE_DISPATCH_BATCH_SIZE=50
+CANDIDATE_DRAFT_DUPLICATE_THRESHOLD=0.88
+
 AUTHENTICATED_RATE_LIMIT_PER_MINUTE=300
 CELERY_TASK_SOFT_TIME_LIMIT_SECONDS=90
 CELERY_TASK_TIME_LIMIT_SECONDS=120
@@ -82,7 +89,7 @@ METRICS_TOKEN=<secret-manager-injected-min-32-chars>
 
 身份采用 `trusted_proxy` 或 `oidc`，生产禁止 `development_header`。自定义 S3-compatible endpoint 在 production 必须使用 HTTPS；若使用 `aws:kms`，同时配置 `DOCUMENT_STORE_S3_KMS_KEY_ID`。
 
-`SOURCE_SCAN_LEASE_SECONDS` 必须严格大于 `CELERY_TASK_TIME_LIMIT_SECONDS`。扫描租约使用 fencing token，即使旧 Worker 因队列延迟在租约过期后才启动，也不能覆盖后续 Worker 的状态。
+`SOURCE_SCAN_LEASE_SECONDS` 和 `CANDIDATE_LEASE_SECONDS` 都必须严格大于 `CELERY_TASK_TIME_LIMIT_SECONDS`。两个调度链均使用 fencing token，旧 Worker 失去租约后不得覆盖新 Worker 状态。
 
 ## 5. Worker 与 Beat
 
@@ -100,7 +107,12 @@ celery -A app.celery_app.celery_app beat --loglevel=INFO --schedule=/tmp/celeryb
 
 Beat 不能和 API 进程混跑。多副本部署时只能存在一个有效 Beat 调度器，或改用具有分布式锁的调度方案。
 
-Beat 不直接抓网页。它周期运行 `zhituo.sources.dispatch_due_scans`，按 Organization 认领到期 `SourceSubscription`，随后每个来源分别派发 `zhituo.sources.scan_subscription` Worker Task。网络抓取、304 处理、Object Storage 归档和健康状态更新均在 Worker 中执行。
+Beat 当前负责两个独立持久化调度链：
+
+1. `zhituo.sources.dispatch_due_scans`：按 Organization 认领到期 SourceSubscription，分别派发来源扫描 Worker；
+2. `zhituo.candidates.dispatch_pending`：按 Organization 认领待处理 CandidateProcessing，分别派发项目识别 Worker。
+
+Beat 本身不执行网页抓取、Object Storage 下载或 AI 推理。
 
 ## 6. Source Monitoring 运行保障
 
@@ -121,7 +133,33 @@ Beat 不直接抓网页。它周期运行 `zhituo.sources.dispatch_due_scans`，
 6. manager 可以恢复并立即重新扫描；
 7. 其他 Organization 无法读取该订阅和扫描历史。
 
-## 7. 容器安全基线
+## 7. Candidate Pipeline 运行保障
+
+每个新 SourceDocument 必须在相同数据库事务中获得一条唯一 `candidate_processing`，因此 Redis 不是可靠性单点。
+
+Worker 流程：
+
+1. 读取 CandidateProcessing 与 SourceDocument 元数据；
+2. 结束数据库读事务；
+3. 从 S3/Object Storage 读取并校验规范文本；
+4. 执行 Project Detection；
+5. 重新开启短事务，使用 `FOR UPDATE + lease_token` fencing；
+6. PostgreSQL 下使用 organization 级 advisory lock 收紧并发候选去重；
+7. 写入 `no_project / duplicate / candidate_created / retry / failed`。
+
+上线后应至少验证：
+
+1. 新 SourceDocument 能自动出现 CandidateProcessing；
+2. Redis 暂时不可用后，待处理行仍保留并可后续派发；
+3. 明确非项目文档进入 `no_project`，不产生 OpportunityDraft；
+4. 明确项目进入 `/api/candidates` 待审收件箱；
+5. 两个高度相似待审项目只出现一个候选卡片；
+6. 失去 token 的旧 Worker 返回 stale claim，不覆盖新租约；
+7. 达到最大尝试次数后进入 `failed`，manager 可人工 retry；
+8. 人工 confirm 前重新从 Object Storage 校验正文，原件缺失/损坏时拒绝入池；
+9. 其他 Organization 无法读取或写入该 CandidateProcessing。
+
+## 8. 容器安全基线
 
 示例 Compose 已启用：
 
@@ -137,7 +175,7 @@ Beat 不直接抓网页。它周期运行 `zhituo.sources.dispatch_due_scans`，
 
 注意：Production DocumentStore 为外部 S3-compatible 服务，因此 API/Worker 容器不需要通过可写本地卷保存正式来源原件。
 
-## 8. 数据库角色
+## 9. 数据库角色
 
 - `migration_owner`：仅部署迁移；
 - `runtime_app`：API / Worker / Beat，`NOBYPASSRLS`；
@@ -147,11 +185,11 @@ Beat 不直接抓网页。它周期运行 `zhituo.sources.dispatch_due_scans`，
 
 每次新增表并执行 Alembic 迁移后，都需要重新运行 `ops/postgres/provision_runtime_role.sql`，确保 runtime role 获得新表 DML 权限；RLS 仍是租户隔离的最终数据库边界。
 
-## 9. 上线顺序
+## 10. 上线顺序
 
 1. 备份当前数据库；
 2. 使用 migration owner 执行 `alembic upgrade head`；
-3. 重新执行 runtime role grant 脚本，确保新表权限完整；
+3. 重新执行 runtime role grant 脚本，确保 `candidate_processing` 等新表权限完整；
 4. 验证 S3 Bucket、SSE/KMS 与 workload identity；
 5. 启动 API；
 6. Readiness 通过；
@@ -162,4 +200,6 @@ Beat 不直接抓网页。它周期运行 `zhituo.sources.dispatch_due_scans`，
 11. 验证 `/internal/metrics`、Prometheus Target 和告警规则；
 12. 执行一次普通异步任务 smoke test；
 13. 创建一个测试 SourceSubscription，并验证首次 changed/unchanged 与后续 304/健康历史；
-14. 观察错误率、队列延迟、来源失败率和数据库连接池后再扩大流量。
+14. 验证该 SourceDocument 进入 CandidateProcessing，并最终形成 no_project 或 Candidate Inbox；
+15. 对测试 Candidate 执行 reject，或确认其证据链完整后 confirm；
+16. 观察错误率、队列延迟、来源失败率、Candidate retry/failed 数量和数据库连接池后再扩大流量。
