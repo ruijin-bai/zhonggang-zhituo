@@ -8,7 +8,8 @@ from .celery_app import celery_app
 from .db import OrganizationRecord, SessionLocal, set_tenant_context
 from .discovery import discover
 from .ingestion import ingest_source
-from .job_ledger import reconcile_stuck_jobs
+from .job_ledger import count_stale_queued_jobs, reconcile_stuck_jobs
+from .metrics import set_stale_queued_jobs
 from .models import DiscoverRequest, SourceIngestRequest
 from .radar import BatchScanRequest, batch_scan
 from .repository import get_opportunity
@@ -35,10 +36,17 @@ def reconcile_stuck_jobs_task() -> dict:
         ).all()
 
     reconciled: list[str] = []
+    stale_queued = 0
     for organization_id in organization_ids:
         with _tenant_session(organization_id) as session:
+            stale_queued += count_stale_queued_jobs(session)
             reconciled.extend(reconcile_stuck_jobs(session))
-    return {"organizations_scanned": len(organization_ids), "reconciled": reconciled}
+    set_stale_queued_jobs(stale_queued)
+    return {
+        "organizations_scanned": len(organization_ids),
+        "reconciled": reconciled,
+        "stale_queued": stale_queued,
+    }
 
 
 @celery_app.task(bind=True, base=TrackedTask, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.discovery.scan")
