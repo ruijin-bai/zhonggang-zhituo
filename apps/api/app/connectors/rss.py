@@ -29,7 +29,19 @@ def _child_text(element: ElementTree.Element, *names: str) -> str:
     return ""
 
 
+def _feed_container(root: ElementTree.Element) -> ElementTree.Element:
+    """Return the element that owns feed metadata and entries for RSS or Atom."""
+
+    if _local_name(root.tag) == "rss":
+        for child in list(root):
+            if _local_name(child.tag) == "channel":
+                return child
+        raise ValueError("RSS 订阅源缺少 channel 节点")
+    return root
+
+
 def _entry_link(element: ElementTree.Element) -> str:
+    fallback = ""
     for child in list(element):
         if _local_name(child.tag) != "link":
             continue
@@ -37,10 +49,12 @@ def _entry_link(element: ElementTree.Element) -> str:
         rel = (child.attrib.get("rel") or "alternate").lower()
         if href and rel in {"alternate", ""}:
             return href
+        if href and not fallback:
+            fallback = href
         text = "".join(child.itertext()).strip()
-        if text:
-            return text
-    return ""
+        if text and not fallback:
+            fallback = text
+    return fallback
 
 
 def _parse_datetime(value: str) -> datetime | None:
@@ -77,11 +91,12 @@ def parse_feed_resource(resource: PublicResource) -> list[SourceDocument]:
     except ElementTree.ParseError as exc:
         raise ValueError("RSS/Atom XML 无法解析") from exc
 
-    feed_title = _child_text(root, "title")
+    feed = _feed_container(root)
+    feed_title = _child_text(feed, "title")
     publisher = feed_title or None
     entries = [
         element
-        for element in root.iter()
+        for element in feed.iter()
         if _local_name(element.tag) in {"item", "entry"}
     ]
     if not entries:
