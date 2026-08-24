@@ -21,7 +21,14 @@ from app.db import (
 )
 from app.discovery import confirm_draft
 from app.document_store import LocalDocumentStore
-from app.models import ConfirmDraftRequest, ProjectDiscovery
+from app.intelligence_db import (
+    CandidateSourceDocumentRecord,
+    EntityRecord,
+    OpportunityEntityLinkRecord,
+    SourceDocumentInsightRecord,
+    SourceEntityMentionRecord,
+)
+from app.models import ConfirmDraftRequest, ProjectDiscovery, ProjectParty
 from app.source_archive import archive_connector_result
 
 
@@ -88,6 +95,24 @@ class FakeAI:
 
 
 def _project(title: str, *, detected: bool = True, country: str = "Nigeria") -> ProjectDiscovery:
+    parties = []
+    if detected:
+        parties = [
+            ProjectParty(
+                role="owner",
+                name="Nigerian Ports Authority",
+                country=country,
+                evidence_quote="Owner: Nigerian Ports Authority",
+                confidence=0.94,
+            ),
+            ProjectParty(
+                role="financier",
+                name="World Bank",
+                country=None,
+                evidence_quote="Financier: World Bank",
+                confidence=0.91,
+            ),
+        ]
     return ProjectDiscovery(
         project_detected=detected,
         title=title,
@@ -100,6 +125,7 @@ def _project(title: str, *, detected: bool = True, country: str = "Nigeria") -> 
         summary="Specific port expansion procurement opportunity." if detected else "Policy article only.",
         confidence=0.86 if detected else 0.2,
         facts=[],
+        parties=parties,
     )
 
 
@@ -145,6 +171,14 @@ def test_new_source_document_creates_durable_candidate_and_human_confirm_reads_o
     assert draft.status == "pending"
     assert draft.raw_text == ""
     assert draft.source_url == "https://8.8.8.8/projects/lagos-port"
+    assert session.get(SourceDocumentInsightRecord, document_id) is not None
+    assert session.scalar(
+        select(func.count()).select_from(CandidateSourceDocumentRecord).where(
+            CandidateSourceDocumentRecord.draft_id == draft.id
+        )
+    ) == 1
+    assert session.scalar(select(func.count()).select_from(EntityRecord)) == 2
+    assert session.scalar(select(func.count()).select_from(SourceEntityMentionRecord)) == 2
 
     confirmed = confirm_draft(
         draft.id,
@@ -159,6 +193,12 @@ def test_new_source_document_creates_durable_candidate_and_human_confirm_reads_o
     assert source is not None
     assert source.raw_text == source_text
     assert draft.status == "confirmed"
+    links = session.scalars(
+        select(OpportunityEntityLinkRecord).where(
+            OpportunityEntityLinkRecord.opportunity_id == confirmed.opportunity.id
+        )
+    ).all()
+    assert {item.role for item in links} == {"owner", "financier"}
     session.close()
     engine.dispose()
 
@@ -187,13 +227,14 @@ def test_non_project_document_is_terminal_without_candidate_draft(monkeypatch, t
     assert result.status == "no_project"
     assert result.project_detected is False
     assert session.scalar(select(func.count()).select_from(OpportunityDraftRecord)) == 0
+    assert session.get(SourceDocumentInsightRecord, archived.documents[0].id) is not None
     processing = session.get(CandidateProcessingRecord, archived.documents[0].id)
     assert processing.processed_at is not None
     session.close()
     engine.dispose()
 
 
-def test_repeated_project_from_different_source_is_suppressed_in_candidate_inbox(
+def test_repeated_project_from_different_source_is_aggregated_into_one_candidate(
     monkeypatch,
     tmp_path,
 ):
@@ -242,6 +283,34 @@ def test_repeated_project_from_different_source_is_suppressed_in_candidate_inbox
     assert second_result.duplicate_draft_id == first_result.draft_id
     assert session.scalar(select(func.count()).select_from(OpportunityDraftRecord)) == 1
     assert first.documents[0].id != second.documents[0].id
+    assert session.scalar(
+        select(func.count()).select_from(CandidateSourceDocumentRecord).where(
+            CandidateSourceDocumentRecord.draft_id == first_result.draft_id
+        )
+    ) == 2
+    # Exact identity resolution must reuse the same owner/financier entities across both sources.
+    assert session.scalar(select(func.count()).select_from(EntityRecord)) == 2
+    assert session.scalar(select(func.count()).select_from(SourceEntityMentionRecord)) == 4
+
+    confirmed = confirm_draft(
+        first_result.draft_id,
+        ConfirmDraftRequest(),
+        session,
+        store=store,
+    )
+    assert session.scalar(
+        select(func.count()).select_from(SourceRecord).where(
+            SourceRecord.opportunity_id == confirmed.opportunity.id
+        )
+    ) == 2
+    entity_links = session.scalars(
+        select(OpportunityEntityLinkRecord).where(
+            OpportunityEntityLinkRecord.opportunity_id == confirmed.opportunity.id
+        )
+    ).all()
+    assert len(entity_links) == 2
+    assert all(item.source_count == 2 for item in entity_links)
+    assert "汇聚 2 份来源" in confirmed.note
     session.close()
     engine.dispose()
 

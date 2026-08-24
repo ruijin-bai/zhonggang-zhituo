@@ -15,6 +15,7 @@ ScoreField = Literal[
     "competition",
     "risk_control",
 ]
+ProjectPartyRole = Literal["owner", "financier", "competitor", "partner"]
 
 
 class ScoreBreakdown(BaseModel):
@@ -117,6 +118,14 @@ class AnalysisResult(BaseModel):
     evidence_gaps: list[str] = Field(default_factory=list)
 
 
+class ProjectParty(BaseModel):
+    role: ProjectPartyRole
+    name: str = Field(min_length=2, max_length=320)
+    country: str | None = Field(default=None, max_length=120)
+    evidence_quote: str = Field(default="", max_length=1000)
+    confidence: float = Field(default=1.0, ge=0, le=1)
+
+
 class ProjectDiscovery(BaseModel):
     project_detected: bool
     title: str
@@ -129,6 +138,7 @@ class ProjectDiscovery(BaseModel):
     summary: str
     confidence: float = Field(ge=0, le=1)
     facts: list[ExtractedFact] = Field(default_factory=list)
+    parties: list[ProjectParty] = Field(default_factory=list)
 
 
 class DiscoverRequest(BaseModel):

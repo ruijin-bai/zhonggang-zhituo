@@ -1,8 +1,9 @@
 import re
+from dataclasses import dataclass
 from hashlib import sha256
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -17,6 +18,11 @@ from .db import (
     SourceRecord,
 )
 from .document_store import DocumentStore, build_document_store
+from .intelligence import (
+    aggregate_candidate_entities_to_opportunity,
+    candidate_source_links,
+)
+from .intelligence_db import SourceDocumentInsightRecord
 from .models import (
     ConfirmDraftRequest,
     ConfirmDraftResult,
@@ -26,6 +32,10 @@ from .models import (
     ProjectDiscovery,
     ScoreBreakdown,
 )
+from .opportunity_evidence import (
+    link_opportunity_source_document,
+    sync_opportunity_entities,
+)
 from .project_matching import opportunity_duplicate_matches
 from .repository import get_opportunity
 from .scoring import calculate_score
@@ -33,8 +43,8 @@ from .source_db import SourceDocumentRecord
 from .web_fetch import fetch_public_page
 
 
-def _slug(text: str) -> str:
-    asciiish = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
+def _slug(text_value: str) -> str:
+    asciiish = re.sub(r"[^a-zA-Z0-9]+", "-", text_value).strip("-").lower()
     return (asciiish[:70] or "opportunity") + "-" + uuid4().hex[:8]
 
 
@@ -99,7 +109,7 @@ async def discover(request: DiscoverRequest, session: Session) -> DiscoverResult
     )
 
 
-def _initial_breakdown(discovery: ProjectDiscovery) -> ScoreBreakdown:
+def _initial_breakdown(discoveries: list[ProjectDiscovery]) -> ScoreBreakdown:
     values = {
         "strategic_fit": 0,
         "project_maturity": 0,
@@ -120,34 +130,102 @@ def _initial_breakdown(discovery: ProjectDiscovery) -> ScoreBreakdown:
         "competition": 10,
         "risk_control": 5,
     }
-    for fact in discovery.facts:
-        if fact.score_hint is not None and fact.confidence >= 0.75:
-            values[fact.field_name] = max(0, min(limits[fact.field_name], fact.score_hint))
+    for discovery in discoveries:
+        for fact in discovery.facts:
+            if fact.score_hint is not None and fact.confidence >= 0.75:
+                normalized = max(0, min(limits[fact.field_name], fact.score_hint))
+                values[fact.field_name] = max(values[fact.field_name], normalized)
     return ScoreBreakdown.model_validate(values)
 
 
-def _candidate_source_text(
-    draft: OpportunityDraftRecord,
-    session: Session,
-    *,
-    store: DocumentStore | None = None,
-) -> str:
-    if draft.raw_text and draft.raw_text.strip():
-        return draft.raw_text
+@dataclass(frozen=True)
+class _CandidateEvidenceSource:
+    source_document_id: str | None
+    title: str
+    publisher: str
+    published_at: str
+    source_rank: str
+    url: str | None
+    text: str
+    discovery: ProjectDiscovery
 
-    processing = session.scalar(
-        select(CandidateProcessingRecord).where(CandidateProcessingRecord.draft_id == draft.id)
-    )
-    if processing is None:
-        raise ValueError("候选商机缺少原始 SourceDocument 关联，不能在无证据情况下入池。")
-    document = session.get(SourceDocumentRecord, processing.source_document_id)
-    if document is None:
-        raise ValueError("候选商机对应的 SourceDocument 已不存在，不能确认入池。")
-    resolved_store = store or build_document_store()
-    raw = resolved_store.get(document.text_object_key)
+
+def _read_document_text(document: SourceDocumentRecord, store: DocumentStore) -> str:
+    raw = store.get(document.text_object_key)
     if sha256(raw).hexdigest() != document.content_sha256:
         raise RuntimeError("候选商机规范文本对象 SHA-256 校验失败")
     return raw.decode("utf-8", errors="strict")
+
+
+def _candidate_evidence_sources(
+    draft: OpportunityDraftRecord,
+    primary_discovery: ProjectDiscovery,
+    session: Session,
+    *,
+    store: DocumentStore | None = None,
+) -> list[_CandidateEvidenceSource]:
+    if draft.raw_text and draft.raw_text.strip():
+        return [
+            _CandidateEvidenceSource(
+                source_document_id=None,
+                title=draft.source_title,
+                publisher=draft.publisher,
+                published_at=draft.published_at,
+                source_rank=draft.source_rank,
+                url=draft.source_url,
+                text=draft.raw_text,
+                discovery=primary_discovery,
+            )
+        ]
+
+    links = candidate_source_links(session, draft.id)
+    # Backward-compatible fallback for an automatic Candidate created before 0012 is applied or
+    # imported from an older database snapshot.
+    if not links:
+        processing = session.scalar(
+            select(CandidateProcessingRecord).where(CandidateProcessingRecord.draft_id == draft.id)
+        )
+        if processing is None:
+            raise ValueError("候选商机缺少原始 SourceDocument 关联，不能在无证据情况下入池。")
+        from types import SimpleNamespace
+
+        links = [
+            SimpleNamespace(
+                source_document_id=processing.source_document_id,
+                is_primary=True,
+            )
+        ]
+
+    resolved_store = store or build_document_store()
+    result: list[_CandidateEvidenceSource] = []
+    for link in links:
+        document = session.get(SourceDocumentRecord, link.source_document_id)
+        if document is None:
+            raise ValueError("候选商机支持来源的 SourceDocument 已不存在，不能确认入池。")
+        insight = session.get(SourceDocumentInsightRecord, document.id)
+        source_discovery = primary_discovery
+        if insight is not None:
+            try:
+                source_discovery = ProjectDiscovery.model_validate(insight.discovery)
+            except (TypeError, ValueError):
+                source_discovery = primary_discovery
+        result.append(
+            _CandidateEvidenceSource(
+                source_document_id=document.id,
+                title=document.title,
+                publisher=document.publisher or "公开来源",
+                published_at=(
+                    document.published_at.isoformat() if document.published_at else "待核实"
+                ),
+                source_rank=draft.source_rank,
+                url=document.canonical_url,
+                text=_read_document_text(document, resolved_store),
+                discovery=source_discovery,
+            )
+        )
+    if not result:
+        raise ValueError("候选商机没有可验证的支持来源，不能确认入池。")
+    return result
 
 
 def confirm_draft(
@@ -163,19 +241,31 @@ def confirm_draft(
     if draft.status != "pending":
         raise ValueError("该草稿已处理，不能重复确认。")
 
-    discovery = ProjectDiscovery.model_validate(draft.discovery)
+    primary_discovery = ProjectDiscovery.model_validate(draft.discovery)
     patch = edits.model_dump(exclude_none=True)
-    if patch:
-        discovery = discovery.model_copy(update=patch)
-    if not discovery.project_detected:
+    reviewed_discovery = (
+        primary_discovery.model_copy(update=patch) if patch else primary_discovery
+    )
+    if not reviewed_discovery.project_detected:
         raise ValueError("当前草稿未识别出明确项目，不能直接入池。")
 
-    source_text = _candidate_source_text(draft, session, store=store)
-    opportunity_id = _slug(discovery.title)
-    breakdown = _initial_breakdown(discovery)
-    # A newly discovered opportunity normally has only one source. Force evidence-insufficient
-    # status instead of treating unknown dimensions as proof that the opportunity is poor.
-    confidence = max(20, min(44, round(discovery.confidence * 100)))
+    evidence_sources = _candidate_evidence_sources(
+        draft,
+        reviewed_discovery,
+        session,
+        store=store,
+    )
+    discoveries = [item.discovery for item in evidence_sources]
+    # Human-reviewed headline fields remain authoritative, while facts from every supporting
+    # source contribute to the initial breakdown.
+    if reviewed_discovery not in discoveries:
+        discoveries.insert(0, reviewed_discovery)
+
+    opportunity_id = _slug(reviewed_discovery.title)
+    breakdown = _initial_breakdown(discoveries)
+    # Even multiple public B-rank sources are not enough by themselves to unlock a substantive
+    # Go/No-Go decision. Confidence remains below 45 until later verified evidence arrives.
+    confidence = max(20, min(44, round(reviewed_discovery.confidence * 100)))
     score_result = calculate_score(breakdown, confidence)
     next_actions = [
         "补齐业主与决策链证据",
@@ -185,14 +275,14 @@ def confirm_draft(
 
     record = OpportunityRecord(
         id=opportunity_id,
-        title=discovery.title,
-        country=discovery.country,
-        region=discovery.region,
-        sector=discovery.sector,
-        stage=discovery.stage,
-        owner=discovery.owner,
-        estimated_value_usd_m=discovery.estimated_value_usd_m,
-        summary=discovery.summary,
+        title=reviewed_discovery.title,
+        country=reviewed_discovery.country,
+        region=reviewed_discovery.region,
+        sector=reviewed_discovery.sector,
+        stage=reviewed_discovery.stage,
+        owner=reviewed_discovery.owner,
+        estimated_value_usd_m=reviewed_discovery.estimated_value_usd_m,
+        summary=reviewed_discovery.summary,
         score=score_result.total,
         grade=score_result.grade,
         confidence=confidence,
@@ -208,50 +298,89 @@ def confirm_draft(
     session.add(record)
     session.flush()
 
-    source_id = str(uuid4())
-    session.add(
-        SourceRecord(
-            id=source_id,
-            opportunity_id=opportunity_id,
-            title=draft.source_title,
-            publisher=draft.publisher,
-            published_at=draft.published_at,
-            source_rank=draft.source_rank,
-            url=draft.source_url,
-            raw_text=source_text,
-            is_demo=draft.is_demo,
-        )
-    )
-    for fact in discovery.facts:
+    source_ids: list[str] = []
+    source_document_ids: list[str] = []
+    for evidence_source in evidence_sources:
+        source_id = str(uuid4())
+        source_ids.append(source_id)
+        if evidence_source.source_document_id:
+            source_document_ids.append(evidence_source.source_document_id)
         session.add(
-            EvidenceRecord(
-                id=str(uuid4()),
+            SourceRecord(
+                id=source_id,
                 opportunity_id=opportunity_id,
-                source_id=source_id,
-                rank=draft.source_rank,
-                title=draft.source_title,
-                publisher=draft.publisher,
-                published_at=draft.published_at,
-                fact=fact.evidence_quote,
-                field_name=fact.field_name,
-                confidence=fact.confidence,
-                source_url=draft.source_url,
+                title=evidence_source.title,
+                publisher=evidence_source.publisher,
+                published_at=evidence_source.published_at,
+                source_rank=evidence_source.source_rank,
+                url=evidence_source.url,
+                raw_text=evidence_source.text,
+                is_demo=draft.is_demo,
             )
         )
+        session.flush()
+        # Production PostgreSQL has an explicit source_document_id provenance column from 0012.
+        # SQLite unit tests build metadata directly and intentionally omit migration-only columns.
+        if evidence_source.source_document_id and session.get_bind().dialect.name == "postgresql":
+            session.execute(
+                text("UPDATE sources SET source_document_id=:document WHERE id=:source"),
+                {"document": evidence_source.source_document_id, "source": source_id},
+            )
+        if evidence_source.source_document_id:
+            link_opportunity_source_document(
+                session,
+                opportunity_id=opportunity_id,
+                source_document_id=evidence_source.source_document_id,
+                source_id=source_id,
+            )
+        for fact in evidence_source.discovery.facts:
+            session.add(
+                EvidenceRecord(
+                    id=str(uuid4()),
+                    opportunity_id=opportunity_id,
+                    source_id=source_id,
+                    rank=evidence_source.source_rank,
+                    title=evidence_source.title,
+                    publisher=evidence_source.publisher,
+                    published_at=evidence_source.published_at,
+                    fact=fact.evidence_quote,
+                    field_name=fact.field_name,
+                    confidence=fact.confidence,
+                    source_url=evidence_source.url,
+                )
+            )
+
+    aggregate_candidate_entities_to_opportunity(
+        session,
+        draft_id=draft.id,
+        opportunity_id=opportunity_id,
+        fallback_discovery=reviewed_discovery,
+    )
+    entity_links = sync_opportunity_entities(session, opportunity_id=opportunity_id)
+
     session.add(
         ScoreSnapshotRecord(
             opportunity_id=opportunity_id,
             total=score_result.total,
             grade=score_result.grade,
             breakdown=breakdown.model_dump(),
-            note="公开来源发现并经人工确认入池后的初始评分；因证据不足暂不作 Go/No-Go 实质判断。",
+            note=(
+                f"公开来源发现并经人工确认入池后的初始评分；已汇聚 {len(evidence_sources)} 份支持来源，"
+                "因证据等级仍不足暂不作 Go/No-Go 实质判断。"
+            ),
         )
     )
     session.add(
         OpportunityEventRecord(
             opportunity_id=opportunity_id,
             event_type="opportunity_confirmed_from_discovery",
-            payload={"draft_id": draft.id, "source_id": source_id},
+            payload={
+                "draft_id": draft.id,
+                "source_ids": source_ids,
+                "source_document_ids": source_document_ids,
+                "source_count": len(evidence_sources),
+                "entity_link_count": len(entity_links),
+            },
         )
     )
     draft.status = "confirmed"
@@ -264,7 +393,7 @@ def confirm_draft(
         opportunity=opportunity,
         source_bound=True,
         note=(
-            "已人工确认入池。当前标记为证据不足，需继续补齐业主、融资、能力、属地和竞争等维度后"
-            "再形成正式经营判断。"
+            f"已人工确认入池，并汇聚 {len(evidence_sources)} 份来源。当前仍标记为证据不足，需继续补齐"
+            "业主、融资、能力、属地和竞争等维度后再形成正式经营判断。"
         ),
     )

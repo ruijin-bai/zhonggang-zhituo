@@ -5,7 +5,7 @@ import httpx
 
 from .config import Settings, get_settings
 from .extraction import extract_facts_deterministic
-from .models import AnalysisResult, Opportunity, ProjectDiscovery, SourceExtraction
+from .models import AnalysisResult, Opportunity, ProjectDiscovery, ProjectParty, SourceExtraction
 
 SOURCE_EXTRACTION_SCHEMA = {
     "type": "object",
@@ -16,6 +16,25 @@ SOURCE_EXTRACTION_SCHEMA = {
         "facts": {"type": "array", "items": {"type": "object", "additionalProperties": False, "properties": {"field_name": {"type": "string", "enum": ["strategic_fit", "project_maturity", "financing", "client_quality", "capability_fit", "local_position", "competition", "risk_control"]}, "value": {"type": "string"}, "score_hint": {"type": ["integer", "null"]}, "evidence_quote": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}}, "required": ["field_name", "value", "score_hint", "evidence_quote", "confidence"]}},
     },
     "required": ["project_detected", "summary", "facts"],
+}
+
+PROJECT_PARTY_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "role": {
+                "type": "string",
+                "enum": ["owner", "financier", "competitor", "partner"],
+            },
+            "name": {"type": "string"},
+            "country": {"type": ["string", "null"]},
+            "evidence_quote": {"type": "string"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        },
+        "required": ["role", "name", "country", "evidence_quote", "confidence"],
+    },
 }
 
 PROJECT_DISCOVERY_SCHEMA = {
@@ -33,8 +52,22 @@ PROJECT_DISCOVERY_SCHEMA = {
         "summary": {"type": "string"},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         "facts": SOURCE_EXTRACTION_SCHEMA["properties"]["facts"],
+        "parties": PROJECT_PARTY_SCHEMA,
     },
-    "required": ["project_detected", "title", "country", "region", "sector", "stage", "owner", "estimated_value_usd_m", "summary", "confidence", "facts"],
+    "required": [
+        "project_detected",
+        "title",
+        "country",
+        "region",
+        "sector",
+        "stage",
+        "owner",
+        "estimated_value_usd_m",
+        "summary",
+        "confidence",
+        "facts",
+        "parties",
+    ],
 }
 
 ANALYSIS_SCHEMA = {
@@ -91,6 +124,30 @@ SECTOR_TAXONOMY = [
 ]
 
 
+def _party_from_patterns(
+    text: str,
+    *,
+    role: str,
+    patterns: list[str],
+    country: str | None,
+) -> ProjectParty | None:
+    for pattern in patterns:
+        match = re.search(pattern, text, re.I)
+        if not match:
+            continue
+        name = " ".join(match.group(1).strip().split())
+        if len(name) < 2:
+            continue
+        return ProjectParty(
+            role=role,
+            name=name[:320],
+            country=country,
+            evidence_quote=" ".join(match.group(0).strip().split())[:1000],
+            confidence=0.84,
+        )
+    return None
+
+
 def _deterministic_project(text: str, page_title: str) -> ProjectDiscovery:
     lowered = text.lower()
     project_terms = (
@@ -125,16 +182,55 @@ def _deterministic_project(text: str, page_title: str) -> ProjectDiscovery:
         unit = (value_match.group(2) or "").lower()
         value = raw * 1000 if unit in {"billion", "bn"} else raw
 
-    owner = "待识别"
-    owner_patterns = [
-        r"(?:owner|employer|client|业主)[：:\s]+([^\n。.;]{3,120})",
-        r"(?:executing agency|implementing agency)[：:\s]+([^\n。.;]{3,120})",
-    ]
-    for pattern in owner_patterns:
-        owner_match = re.search(pattern, text, re.I)
-        if owner_match:
-            owner = owner_match.group(1).strip()
-            break
+    known_country = country if country != "待识别" else None
+    owner_party = _party_from_patterns(
+        text,
+        role="owner",
+        country=known_country,
+        patterns=[
+            r"(?:owner|employer|client|业主)[：:\s]+([^\n。.;]{3,120})",
+            r"(?:executing agency|implementing agency)[：:\s]+([^\n。.;]{3,120})",
+        ],
+    )
+    owner = owner_party.name if owner_party else "待识别"
+
+    parties: list[ProjectParty] = []
+    if owner_party:
+        parties.append(owner_party)
+    for role, patterns in (
+        (
+            "financier",
+            [
+                r"(?:financier|lender|financing institution|融资方|贷款方)[：:\s]+([^\n。.;]{3,120})",
+                r"(?:financed|funded)\s+by[：:\s]+([^\n。.;]{3,120})",
+            ],
+        ),
+        (
+            "competitor",
+            [
+                r"(?:competitor|竞争对手)[：:\s]+([^\n。.;]{3,120})",
+                r"(?:preferred bidder|selected bidder|中标候选人)[：:\s]+([^\n。.;]{3,120})",
+            ],
+        ),
+        (
+            "partner",
+            [
+                r"(?:joint venture with|consortium with|partner(?:ed)? with)[：:\s]+([^\n。.;]{3,120})",
+                r"(?:合作方|联合体成员)[：:\s]+([^\n。.;]{3,120})",
+            ],
+        ),
+    ):
+        party = _party_from_patterns(
+            text,
+            role=role,
+            patterns=patterns,
+            country=known_country,
+        )
+        if party and all(
+            not (existing.role == party.role and existing.name.casefold() == party.name.casefold())
+            for existing in parties
+        ):
+            parties.append(party)
 
     title = page_title.strip() if page_title and page_title != "公开来源" else "待确认工程项目机会"
     confidence = 0.62 if detected else 0.25
@@ -154,6 +250,7 @@ def _deterministic_project(text: str, page_title: str) -> ProjectDiscovery:
         summary=("公开来源中识别到工程项目机会，已形成待人工确认的初步项目画像。" if detected else "未从当前文本识别出足够明确的工程项目机会。"),
         confidence=confidence,
         facts=extracted.facts,
+        parties=parties,
     )
 
 
@@ -193,6 +290,8 @@ class AIService:
                     instructions=(
                         "你是海外工程市场机会发现智能体。判断文本是否描述具体或潜在基础设施工程项目。"
                         "只填写原文可支持的项目名称、国别、区域、专业、阶段、业主和金额；无法确认时写‘待识别/待核实’。"
+                        "parties 只提取原文明确出现的 owner、financier、competitor、partner，必须提供最短证据原文；"
+                        "不要根据常识猜测融资方、竞争对手、合作伙伴或企业关系。"
                         "不要把宏观政策、无具体项目的行业新闻误报成项目。facts 仅记录能映射到既定评分维度且有原文证据的事实。"
                     ),
                     user_input=f"网页标题：{page_title}\n\n正文：\n{text}",
