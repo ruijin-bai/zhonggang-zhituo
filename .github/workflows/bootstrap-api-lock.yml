@@ -1,0 +1,30 @@
+name: Bootstrap API Lock
+
+on:
+  push:
+    branches: [feat/source-document-store]
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    if: ${{ !contains(github.event.head_commit.message, '[lock-bootstrap]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'uv>=0.8,<1'
+      - name: Refresh uv lock
+        working-directory: apps/api
+        run: uv lock
+      - name: Commit lock
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/api/uv.lock
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'build: refresh API dependency lock [lock-bootstrap]'
+          git push origin HEAD:${{ github.ref_name }}
