@@ -6,6 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .db import OpportunityEventRecord, PursuitActionRecord, PursuitAlertRecord, WatchItemRecord
+from .pursuit_legacy import mirror_legacy_action, sync_legacy_watch
 from .repository import get_opportunity, list_opportunities
 
 
@@ -114,6 +115,8 @@ def watch_opportunity(opportunity_id: str, payload: WatchUpsert, session: Sessio
     record.rationale = payload.rationale
     record.next_review_at = payload.next_review_at
     record.status = "active"
+    session.flush()
+    sync_legacy_watch(session, record)
     session.add(OpportunityEventRecord(opportunity_id=opportunity_id, event_type="watch_updated", payload=payload.model_dump(mode="json")))
     session.commit()
     return {"ok": True, "opportunity_id": opportunity_id}
@@ -124,6 +127,7 @@ def add_action(opportunity_id: str, payload: ActionCreate, session: Session) -> 
     record = PursuitActionRecord(opportunity_id=opportunity_id, **payload.model_dump())
     session.add(record)
     session.flush()
+    mirror_legacy_action(session, record)
     session.add(OpportunityEventRecord(opportunity_id=opportunity_id, event_type="action_created", payload={"action_id": record.id, "title": record.title}))
     session.commit()
     return {"ok": True, "action_id": record.id}
@@ -133,9 +137,12 @@ def complete_action(action_id: int, session: Session) -> dict:
     action = session.get(PursuitActionRecord, action_id)
     if not action: raise ValueError("行动不存在")
     if action.status == "done":
+        mirror_legacy_action(session, action)
+        session.commit()
         return {"ok": True, "action_id": action.id, "already_completed": True}
     action.status = "done"
     action.completed_at = _now()
+    mirror_legacy_action(session, action)
     session.add(OpportunityEventRecord(opportunity_id=action.opportunity_id, event_type="action_completed", payload={"action_id": action.id, "title": action.title}))
     session.commit()
     return {"ok": True, "action_id": action.id, "already_completed": False}
