@@ -11,6 +11,7 @@ from .db import AuditLogRecord, get_db
 from .entity_api import router as entity_router
 from .health import router as health_router
 from .pursuit_api import router as pursuit_router
+from .pursuit_delivery_api import router as pursuit_delivery_router
 from .pursuit_reminder_api import router as pursuit_reminder_router
 from .search_api import router as search_router
 from .security import Principal, get_principal, require_role
@@ -25,6 +26,7 @@ router.include_router(search_router)
 router.include_router(briefing_router)
 router.include_router(pursuit_router)
 router.include_router(pursuit_reminder_router)
+router.include_router(pursuit_delivery_router)
 
 
 class MeResponse(BaseModel):
