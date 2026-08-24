@@ -145,6 +145,14 @@ class S3DocumentStore:
                 return None
             raise
 
+    @staticmethod
+    def _verify_existing_object(head: dict, *, digest: str, size_bytes: int) -> None:
+        if int(head.get("ContentLength", -1)) != size_bytes:
+            raise RuntimeError("content-addressed S3 object has an unexpected size")
+        metadata = head.get("Metadata") or {}
+        if metadata.get("sha256") != digest:
+            raise RuntimeError("content-addressed S3 object is missing or has invalid SHA-256 metadata")
+
     def put(
         self,
         *,
@@ -157,8 +165,7 @@ class S3DocumentStore:
         key = object_key(namespace, normalized)
         head = self._head(key)
         if head is not None:
-            if int(head.get("ContentLength", len(data))) != len(data):
-                raise RuntimeError("content-addressed S3 object has an unexpected size")
+            self._verify_existing_object(head, digest=normalized, size_bytes=len(data))
             return StoredObject(
                 backend=self.backend,
                 key=key,
