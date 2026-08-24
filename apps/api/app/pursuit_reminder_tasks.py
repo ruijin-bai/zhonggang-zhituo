@@ -31,7 +31,7 @@ def reconcile_pursuit_reminders_for_tenant_task(self, organization_id: str) -> d
 
 @celery_app.task(name="zhituo.pursuit.reconcile_reminders")
 def reconcile_pursuit_reminders_task() -> dict:
-    """Beat dispatcher: isolate reconciliation in one worker task per active tenant."""
+    """Beat dispatcher: isolate reconciliation and dispatch failure per active tenant."""
     with SessionLocal() as control_session:
         organization_ids = list(
             control_session.scalars(
@@ -39,11 +39,25 @@ def reconcile_pursuit_reminders_task() -> dict:
             ).all()
         )
 
-    task_ids = [
-        reconcile_pursuit_reminders_for_tenant_task.delay(organization_id).id
-        for organization_id in organization_ids
-    ]
+    dispatched: list[dict] = []
+    dispatch_failures: list[dict] = []
+    for organization_id in organization_ids:
+        try:
+            result = reconcile_pursuit_reminders_for_tenant_task.apply_async(
+                args=(organization_id,),
+                headers={"organization_id": organization_id},
+            )
+            dispatched.append(
+                {"organization_id": organization_id, "task_id": result.id}
+            )
+        except Exception as exc:
+            dispatch_failures.append(
+                {"organization_id": organization_id, "error": str(exc)[:500]}
+            )
+
     return {
-        "organizations_dispatched": len(organization_ids),
-        "task_ids": task_ids,
+        "organizations_scanned": len(organization_ids),
+        "dispatched": len(dispatched),
+        "tasks": dispatched,
+        "dispatch_failures": dispatch_failures,
     }
