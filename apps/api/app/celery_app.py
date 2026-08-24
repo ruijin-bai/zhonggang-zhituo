@@ -29,6 +29,10 @@ celery_app.conf.update(
         "reconcile-stuck-background-jobs": {
             "task": "zhituo.maintenance.reconcile_stuck_jobs",
             "schedule": 60.0,
-        }
+        },
+        "dispatch-due-source-scans": {
+            "task": "zhituo.sources.dispatch_due_scans",
+            "schedule": float(settings.source_scan_dispatch_interval_seconds),
+        },
     },
 )
