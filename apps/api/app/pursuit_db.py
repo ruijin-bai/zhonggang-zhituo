@@ -123,6 +123,23 @@ class PursuitWorkItemRecord(TenantScopedMixin, Base):
     )
 
 
+@event.listens_for(PursuitWorkItemRecord, "before_insert")
+def _initialize_blocked_since(mapper, connection, target: PursuitWorkItemRecord) -> None:
+    if target.status == "blocked" and target.blocked_since is None:
+        target.blocked_since = utc_now()
+    elif target.status != "blocked":
+        target.blocked_since = None
+
+
+@event.listens_for(PursuitWorkItemRecord, "before_update")
+def _maintain_blocked_since(mapper, connection, target: PursuitWorkItemRecord) -> None:
+    if target.status == "blocked":
+        if target.blocked_since is None:
+            target.blocked_since = utc_now()
+    else:
+        target.blocked_since = None
+
+
 class PursuitDecisionGateRecord(TenantScopedMixin, Base):
     __tablename__ = "pursuit_decision_gates"
 
