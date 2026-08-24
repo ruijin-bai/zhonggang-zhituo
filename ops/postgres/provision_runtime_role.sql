@@ -61,7 +61,13 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     source_documents,
     source_subscriptions,
     source_scan_runs,
-    candidate_processing
+    candidate_processing,
+    source_document_insights,
+    candidate_source_documents,
+    entities,
+    entity_aliases,
+    source_entity_mentions,
+    opportunity_entity_links
 TO :"runtime_role";
 
 GRANT SELECT, INSERT ON TABLE audit_logs TO :"runtime_role";
