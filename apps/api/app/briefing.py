@@ -6,14 +6,20 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .db import (
+    MembershipRecord,
     OpportunityDraftRecord,
     OpportunityEventRecord,
     OpportunityRecord,
     PursuitActionRecord,
     PursuitAlertRecord,
+    UserRecord,
     WatchItemRecord,
     utc_now,
 )
+from .pursuit_db import PursuitWorkItemRecord
+
+
+ACTIVE_WORK_STATUSES = ("open", "in_progress", "blocked")
 
 
 def _opportunity_titles(session: Session, opportunity_ids: set[str]) -> dict[str, str]:
@@ -27,11 +33,30 @@ def _opportunity_titles(session: Session, opportunity_ids: set[str]) -> dict[str
     return {row.id: row.title for row in rows}
 
 
-def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> dict:
-    """Build a tenant-scoped operational briefing from existing system-of-record facts.
+def _membership_names(session: Session, membership_ids: set[int]) -> dict[int, str]:
+    if not membership_ids:
+        return {}
+    rows = session.execute(
+        select(MembershipRecord.id, UserRecord.display_name)
+        .join(UserRecord, UserRecord.id == MembershipRecord.user_id)
+        .where(MembershipRecord.id.in_(membership_ids))
+    ).all()
+    return {row.id: row.display_name for row in rows}
 
-    This is deliberately a read model, not another persisted state table. Every query remains
-    subject to the current SQLAlchemy tenant criteria and PostgreSQL RLS context.
+
+def _legacy_unmatched_condition():
+    mirrored_ids = select(PursuitWorkItemRecord.source_action_id).where(
+        PursuitWorkItemRecord.source_action_id.is_not(None)
+    )
+    return PursuitActionRecord.id.not_in(mirrored_ids)
+
+
+def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> dict:
+    """Build the tenant-scoped operating brief from canonical facts.
+
+    Pursuit Work Item is the canonical Stage B work model. Legacy Tracking v1 actions remain a
+    temporary read-only fallback only when they have not been migrated/mirrored into a Work Item.
+    This keeps the morning brief complete without double-counting the same action.
     """
 
     now = utc_now()
@@ -61,16 +86,39 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
         .select_from(PursuitAlertRecord)
         .where(PursuitAlertRecord.status == "open")
     ) or 0
-    overdue_action_count = session.scalar(
+
+    canonical_overdue_count = session.scalar(
+        select(func.count())
+        .select_from(PursuitWorkItemRecord)
+        .where(
+            PursuitWorkItemRecord.status.in_(ACTIVE_WORK_STATUSES),
+            PursuitWorkItemRecord.due_at.is_not(None),
+            PursuitWorkItemRecord.due_at < now,
+        )
+    ) or 0
+    legacy_overdue_count = session.scalar(
         select(func.count())
         .select_from(PursuitActionRecord)
         .where(
             PursuitActionRecord.status == "open",
             PursuitActionRecord.due_at.is_not(None),
             PursuitActionRecord.due_at < now,
+            _legacy_unmatched_condition(),
         )
     ) or 0
-    due_soon_action_count = session.scalar(
+    overdue_action_count = canonical_overdue_count + legacy_overdue_count
+
+    canonical_due_soon_count = session.scalar(
+        select(func.count())
+        .select_from(PursuitWorkItemRecord)
+        .where(
+            PursuitWorkItemRecord.status.in_(ACTIVE_WORK_STATUSES),
+            PursuitWorkItemRecord.due_at.is_not(None),
+            PursuitWorkItemRecord.due_at >= now,
+            PursuitWorkItemRecord.due_at <= due_soon_until,
+        )
+    ) or 0
+    legacy_due_soon_count = session.scalar(
         select(func.count())
         .select_from(PursuitActionRecord)
         .where(
@@ -78,8 +126,11 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
             PursuitActionRecord.due_at.is_not(None),
             PursuitActionRecord.due_at >= now,
             PursuitActionRecord.due_at <= due_soon_until,
+            _legacy_unmatched_condition(),
         )
     ) or 0
+    due_soon_action_count = canonical_due_soon_count + legacy_due_soon_count
+
     review_due_count = session.scalar(
         select(func.count())
         .select_from(WatchItemRecord)
@@ -96,13 +147,23 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
         .order_by(OpportunityEventRecord.occurred_at.desc())
         .limit(limit)
     ).all()
-
-    overdue_rows = session.scalars(
+    canonical_overdue_rows = session.scalars(
+        select(PursuitWorkItemRecord)
+        .where(
+            PursuitWorkItemRecord.status.in_(ACTIVE_WORK_STATUSES),
+            PursuitWorkItemRecord.due_at.is_not(None),
+            PursuitWorkItemRecord.due_at < now,
+        )
+        .order_by(PursuitWorkItemRecord.due_at.asc())
+        .limit(limit)
+    ).all()
+    legacy_overdue_rows = session.scalars(
         select(PursuitActionRecord)
         .where(
             PursuitActionRecord.status == "open",
             PursuitActionRecord.due_at.is_not(None),
             PursuitActionRecord.due_at < now,
+            _legacy_unmatched_condition(),
         )
         .order_by(PursuitActionRecord.due_at.asc())
         .limit(limit)
@@ -132,11 +193,18 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
 
     opportunity_ids = {
         *(item.opportunity_id for item in event_rows),
-        *(item.opportunity_id for item in overdue_rows),
+        *(item.opportunity_id for item in canonical_overdue_rows),
+        *(item.opportunity_id for item in legacy_overdue_rows),
         *(item.opportunity_id for item in alert_rows),
         *(item.opportunity_id for item in review_rows),
     }
     titles = _opportunity_titles(session, opportunity_ids)
+    assignee_ids = {
+        item.assignee_membership_id
+        for item in canonical_overdue_rows
+        if item.assignee_membership_id is not None
+    }
+    assignees = _membership_names(session, assignee_ids)
 
     recent_events = [
         {
@@ -153,6 +221,25 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
     attention: list[dict] = []
     attention.extend(
         {
+            "kind": "overdue_work_item",
+            "severity": "high",
+            "resource_id": row.id,
+            "opportunity_id": row.opportunity_id,
+            "title": row.title,
+            "subtitle": titles.get(row.opportunity_id, row.opportunity_id),
+            "owner": (
+                assignees.get(row.assignee_membership_id)
+                if row.assignee_membership_id is not None
+                else row.legacy_owner_text or "未分配"
+            ),
+            "due_at": row.due_at.isoformat() if row.due_at else None,
+            "status": row.status,
+            "source": "pursuit_work_item",
+        }
+        for row in canonical_overdue_rows
+    )
+    attention.extend(
+        {
             "kind": "overdue_action",
             "severity": "high",
             "resource_id": str(row.id),
@@ -161,8 +248,10 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
             "subtitle": titles.get(row.opportunity_id, row.opportunity_id),
             "owner": row.owner,
             "due_at": row.due_at.isoformat() if row.due_at else None,
+            "status": row.status,
+            "source": "tracking_v1_fallback",
         }
-        for row in overdue_rows
+        for row in legacy_overdue_rows
     )
     attention.extend(
         {
@@ -221,7 +310,7 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
         "recent_events": recent_events,
         "attention": attention,
         "note": (
-            "Daily Brief 直接聚合当前租户的 Candidate、Opportunity Event、Action、Alert 与 Watch 事实；"
-            "它是实时读模型，不创建第二套业务状态。"
+            "Daily Brief 优先聚合 Stage B Pursuit Work Item，并仅将尚未迁移的 Tracking v1 Action "
+            "作为兼容回退；同一历史行动不会重复计数。"
         ),
     }
