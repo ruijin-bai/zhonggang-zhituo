@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getOpportunity } from "@/lib/api";
 import type { ScoreBreakdown } from "@/lib/types";
@@ -16,7 +17,10 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     <>
       <header className="page-head">
         <div><div className="eyebrow">Opportunity Intelligence</div><h1>{item.title}</h1><div className="muted">{item.country} · {item.sector} · {item.stage}</div></div>
-        <div><span className={`badge badge-${item.grade.toLowerCase()}`}>{item.grade} 级</span></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span className={`badge badge-${item.grade.toLowerCase()}`}>{item.grade} 级</span>
+          <Link className="primary-button" href={`/knowledge/opportunities/${encodeURIComponent(item.id)}`}>360°知识视图</Link>
+        </div>
       </header>
 
       <section className="kpi-grid">
