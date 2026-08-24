@@ -107,6 +107,15 @@ def get_subscription(session: Session, subscription_id: str) -> SourceSubscripti
     )
 
 
+def _lock_subscription(session: Session, subscription_id: str) -> SourceSubscriptionRecord | None:
+    return session.scalar(
+        select(SourceSubscriptionRecord)
+        .where(SourceSubscriptionRecord.id == subscription_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
 def create_subscription(
     session: Session,
     body: SourceSubscriptionCreate,
@@ -128,6 +137,7 @@ def create_subscription(
         interval_seconds=interval,
         next_scan_at=now,
         lease_until=None,
+        lease_token=None,
         etag=None,
         last_modified=None,
         consecutive_failures=0,
@@ -163,7 +173,10 @@ def update_subscription(
     if body.interval_seconds is not None:
         record.interval_seconds = _validated_interval(body.interval_seconds)
         if record.status == "active":
-            record.next_scan_at = min(record.next_scan_at, utc_now() + timedelta(seconds=record.interval_seconds))
+            record.next_scan_at = min(
+                record.next_scan_at,
+                utc_now() + timedelta(seconds=record.interval_seconds),
+            )
     record.updated_at = utc_now()
     session.commit()
     return record
@@ -190,13 +203,19 @@ def list_scan_runs(session: Session, subscription_id: str, *, limit: int = 100) 
     return [scan_run_to_dict(item) for item in rows]
 
 
-def pause_subscription(session: Session, subscription_id: str, *, reason: str = "manual") -> SourceSubscriptionRecord:
+def pause_subscription(
+    session: Session,
+    subscription_id: str,
+    *,
+    reason: str = "manual",
+) -> SourceSubscriptionRecord:
     record = get_subscription(session, subscription_id)
     if record is None:
         raise ValueError("source subscription not found")
     record.status = "paused"
     record.pause_reason = reason
     record.lease_until = None
+    record.lease_token = None
     record.updated_at = utc_now()
     session.commit()
     return record
@@ -213,6 +232,7 @@ def resume_subscription(session: Session, subscription_id: str) -> SourceSubscri
     record.last_error = None
     record.next_scan_at = now
     record.lease_until = None
+    record.lease_token = None
     record.updated_at = now
     session.commit()
     return record
@@ -225,7 +245,11 @@ def _lease_expired_clause(now):
     )
 
 
-def claim_due_subscriptions(session: Session, *, limit: int | None = None) -> list[str]:
+def claim_due_subscriptions(
+    session: Session,
+    *,
+    limit: int | None = None,
+) -> list[tuple[str, str]]:
     settings = get_settings()
     now = utc_now()
     batch_size = limit or settings.source_scan_dispatch_batch_size
@@ -242,36 +266,55 @@ def claim_due_subscriptions(session: Session, *, limit: int | None = None) -> li
     )
     rows = session.scalars(statement).all()
     lease_until = now + timedelta(seconds=settings.source_scan_lease_seconds)
-    ids: list[str] = []
+    claims: list[tuple[str, str]] = []
     for item in rows:
+        token = str(uuid4())
         item.lease_until = lease_until
+        item.lease_token = token
         item.updated_at = now
-        ids.append(item.id)
+        claims.append((item.id, token))
     session.commit()
-    return ids
+    return claims
 
 
-def claim_manual_scan(session: Session, subscription_id: str) -> SourceSubscriptionRecord:
+def claim_manual_scan(
+    session: Session,
+    subscription_id: str,
+) -> tuple[SourceSubscriptionRecord, str]:
     settings = get_settings()
     now = utc_now()
-    record = get_subscription(session, subscription_id)
+    record = _lock_subscription(session, subscription_id)
     if record is None:
         raise ValueError("source subscription not found")
     if record.lease_until is not None and record.lease_until >= now:
+        session.rollback()
         raise ValueError("source subscription already has a scan in progress")
+    token = str(uuid4())
     record.lease_until = now + timedelta(seconds=settings.source_scan_lease_seconds)
+    record.lease_token = token
     record.updated_at = now
     session.commit()
-    return record
+    return record, token
 
 
-def release_dispatch_claim(session: Session, subscription_id: str, error: str) -> None:
+def release_dispatch_claim(
+    session: Session,
+    subscription_id: str,
+    error: str,
+    *,
+    lease_token: str | None = None,
+) -> None:
     settings = get_settings()
-    record = get_subscription(session, subscription_id)
+    record = _lock_subscription(session, subscription_id)
     if record is None:
+        session.rollback()
+        return
+    if lease_token is not None and record.lease_token != lease_token:
+        session.rollback()
         return
     now = utc_now()
     record.lease_until = None
+    record.lease_token = None
     record.last_error = f"dispatch failed: {error}"[:2000]
     record.next_scan_at = now + timedelta(seconds=settings.source_scan_dispatch_interval_seconds)
     record.updated_at = now
@@ -316,11 +359,22 @@ def _record_run(
     )
 
 
+def _scan_snapshot(record: SourceSubscriptionRecord, *, outcome: str) -> SourceScanResult:
+    return SourceScanResult(
+        subscription_id=record.id,
+        outcome=outcome,
+        consecutive_failures=record.consecutive_failures,
+        next_scan_at=record.next_scan_at.isoformat(),
+        status=record.status,
+    )
+
+
 async def scan_subscription(
     session: Session,
     subscription_id: str,
     *,
     manual: bool = False,
+    lease_token: str | None = None,
     store: DocumentStore | None = None,
 ) -> SourceScanResult:
     settings = get_settings()
@@ -328,16 +382,14 @@ async def scan_subscription(
     record = get_subscription(session, subscription_id)
     if record is None:
         raise ValueError("source subscription not found")
+    if lease_token is not None and record.lease_token != lease_token:
+        return _scan_snapshot(record, outcome="stale_claim")
     if not manual and record.status != "active":
-        record.lease_until = None
-        session.commit()
-        return SourceScanResult(
-            subscription_id=record.id,
-            outcome="skipped",
-            consecutive_failures=record.consecutive_failures,
-            next_scan_at=record.next_scan_at.isoformat(),
-            status=record.status,
-        )
+        if lease_token is None or record.lease_token == lease_token:
+            record.lease_until = None
+            record.lease_token = None
+            session.commit()
+        return _scan_snapshot(record, outcome="skipped")
 
     try:
         outcome = await fetch_documents_conditional(
@@ -346,6 +398,23 @@ async def scan_subscription(
             if_none_match=record.etag,
             if_modified_since=record.last_modified,
         )
+
+        # Do not keep a database row lock while doing network I/O. Re-lock after the fetch
+        # and fence the result with the durable token so an expired/stale task cannot overwrite
+        # a newer worker's state.
+        record = _lock_subscription(session, subscription_id)
+        if record is None:
+            session.rollback()
+            raise ValueError("source subscription disappeared during scan")
+        if lease_token is not None and record.lease_token != lease_token:
+            session.rollback()
+            return _scan_snapshot(record, outcome="stale_claim")
+        if not manual and record.status != "active":
+            record.lease_until = None
+            record.lease_token = None
+            session.commit()
+            return _scan_snapshot(record, outcome="skipped")
+
         archive = None
         changed = False
         if not outcome.not_modified:
@@ -360,9 +429,6 @@ async def scan_subscription(
             changed = archive.fetch_created
 
         finished_at = utc_now()
-        record = get_subscription(session, subscription_id)
-        if record is None:
-            raise ValueError("source subscription disappeared during scan")
         record.etag = outcome.etag or record.etag
         record.last_modified = outcome.last_modified or record.last_modified
         record.consecutive_failures = 0
@@ -371,6 +437,7 @@ async def scan_subscription(
         record.last_success_at = finished_at
         record.last_error = None
         record.lease_until = None
+        record.lease_token = None
         record.next_scan_at = finished_at + timedelta(seconds=record.interval_seconds)
         if outcome.not_modified:
             result_outcome = "not_modified"
@@ -415,9 +482,13 @@ async def scan_subscription(
     except Exception as exc:
         session.rollback()
         finished_at = utc_now()
-        record = get_subscription(session, subscription_id)
+        record = _lock_subscription(session, subscription_id)
         if record is None:
+            session.rollback()
             raise
+        if lease_token is not None and record.lease_token != lease_token:
+            session.rollback()
+            return _scan_snapshot(record, outcome="stale_claim")
         error = f"{type(exc).__name__}: {exc}"[:2000]
         record.consecutive_failures += 1
         record.total_scans += 1
@@ -425,6 +496,7 @@ async def scan_subscription(
         record.last_outcome = "failed"
         record.last_error = error
         record.lease_until = None
+        record.lease_token = None
         record.next_scan_at = finished_at + timedelta(
             seconds=_next_failure_delay(record.interval_seconds, record.consecutive_failures)
         )
