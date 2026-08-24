@@ -34,5 +34,9 @@ celery_app.conf.update(
             "task": "zhituo.sources.dispatch_due_scans",
             "schedule": float(settings.source_scan_dispatch_interval_seconds),
         },
+        "dispatch-pending-candidates": {
+            "task": "zhituo.candidates.dispatch_pending",
+            "schedule": float(settings.candidate_dispatch_interval_seconds),
+        },
     },
 )

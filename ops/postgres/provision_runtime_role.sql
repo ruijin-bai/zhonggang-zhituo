@@ -60,7 +60,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     source_fetches,
     source_documents,
     source_subscriptions,
-    source_scan_runs
+    source_scan_runs,
+    candidate_processing
 TO :"runtime_role";
 
 GRANT SELECT, INSERT ON TABLE audit_logs TO :"runtime_role";

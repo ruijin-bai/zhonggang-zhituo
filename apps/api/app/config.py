@@ -48,6 +48,16 @@ class Settings(BaseSettings):
     source_scan_auto_pause_failures: int = 8
     source_scan_dispatch_batch_size: int = 50
 
+    # Candidate processing is a second durable queue after document archival. Source ingestion
+    # never depends on Redis availability; Beat later claims pending candidate rows and workers
+    # turn normalized documents into human-reviewable OpportunityDraft records.
+    candidate_dispatch_interval_seconds: int = 30
+    candidate_lease_seconds: int = 300
+    candidate_max_attempts: int = 5
+    candidate_max_backoff_seconds: int = 3_600
+    candidate_dispatch_batch_size: int = 50
+    candidate_draft_duplicate_threshold: float = 0.88
+
     log_level: str = "INFO"
     request_id_header: str = "X-Request-ID"
     correlation_id_header: str = "X-Correlation-ID"
@@ -98,6 +108,18 @@ class Settings(BaseSettings):
             raise ValueError("SOURCE_SCAN_AUTO_PAUSE_FAILURES must be at least 1")
         if not 1 <= self.source_scan_dispatch_batch_size <= 500:
             raise ValueError("SOURCE_SCAN_DISPATCH_BATCH_SIZE must be between 1 and 500")
+        if self.candidate_dispatch_interval_seconds < 10:
+            raise ValueError("CANDIDATE_DISPATCH_INTERVAL_SECONDS must be at least 10")
+        if self.candidate_lease_seconds <= self.celery_task_time_limit_seconds:
+            raise ValueError("CANDIDATE_LEASE_SECONDS must exceed CELERY_TASK_TIME_LIMIT_SECONDS")
+        if not 1 <= self.candidate_max_attempts <= 20:
+            raise ValueError("CANDIDATE_MAX_ATTEMPTS must be between 1 and 20")
+        if self.candidate_max_backoff_seconds < self.candidate_dispatch_interval_seconds:
+            raise ValueError("CANDIDATE_MAX_BACKOFF_SECONDS must not be below dispatch interval")
+        if not 1 <= self.candidate_dispatch_batch_size <= 500:
+            raise ValueError("CANDIDATE_DISPATCH_BATCH_SIZE must be between 1 and 500")
+        if not 0.75 <= self.candidate_draft_duplicate_threshold <= 0.99:
+            raise ValueError("CANDIDATE_DRAFT_DUPLICATE_THRESHOLD must be between 0.75 and 0.99")
 
         if self.app_env == "production":
             if self.data_backend != "database":
