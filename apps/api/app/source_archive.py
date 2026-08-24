@@ -184,6 +184,7 @@ def archive_connector_result(
     session: Session,
     *,
     store: DocumentStore | None = None,
+    commit: bool = True,
 ) -> SourceArchiveResult:
     if result.connector not in connector_kinds():
         raise ValueError(f"unsupported connector result: {result.connector}")
@@ -245,7 +246,10 @@ def archive_connector_result(
             )
         )
 
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     return SourceArchiveResult(
         connector=result.connector,
         source_url=result.source_url,
