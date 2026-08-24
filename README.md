@@ -21,6 +21,9 @@
 - PostgreSQL + Alembic；
 - Redis + Celery Worker + Beat；
 - Opportunity / Source / Evidence / Score / Strategy / Tracking / Battlecard 业务链；
+- HTML / RSS / Atom / PDF Source Connector；
+- 内容寻址 DocumentStore（Local + S3-compatible）；
+- SourceFetch / SourceDocument 版本、去重和抓取观察历史；
 - RBAC + Organization + OIDC / trusted proxy；
 - SQLAlchemy Tenant Scope + PostgreSQL RLS 双层租户隔离；
 - 写操作幂等、策略乐观并发、持久化后台任务台账和人工重试；
@@ -44,9 +47,9 @@
 
 针对重点机会形成客户诉求、竞争策略、伙伴策略、差异化主张、红队挑战和下一步责任行动。
 
-## Source Connector Foundation
+## Source Intake & Archive
 
-Production Alpha 已开始从“人工粘贴 URL”转向统一外部情报接入。
+Production Alpha 已从“人工粘贴 URL”推进到统一外部情报接入与原件归档。
 
 首批 Connector：
 
@@ -56,9 +59,13 @@ Production Alpha 已开始从“人工粘贴 URL”转向统一外部情报接�
 
 所有 Connector 统一输出 `SourceDocument`：规范 URL、标题、正文、发布时间、发布方、内容类型、原始内容哈希、规范文本哈希和连接器元数据。
 
+抓取后进入 DocumentStore：开发环境可使用 Local Store，生产环境强制 S3-compatible Object Storage。原件和规范文本均以 SHA-256 内容寻址，相同字节不重复保存；PostgreSQL 保存 `source_fetches / source_documents` 版本关系、首次/最近观察时间和出现次数。
+
+同一 URL 同一内容再次出现只更新观察历史；内容发生变化才保留为新版本。RSS/Atom 一个 Feed 可产生多条规范文档，但原始 Feed 只存一份。
+
 外部下载沿用公开 URL 安全校验，并采用流式读取和体积上限，避免把无限响应直接读入内存。PDF 当前只处理存在文本层的文档；扫描件明确进入后续 OCR 管线，而不是静默产生低质量事实。
 
-设计见 [Source Connector 设计](docs/SOURCE_CONNECTORS.md)。
+设计见 [Source Connector 与文档归档设计](docs/SOURCE_CONNECTORS.md)。
 
 ## 技术架构
 
@@ -74,11 +81,16 @@ FastAPI Application
   └─ Job Dispatcher
        ↓
 Redis → Celery Worker / Beat
+       ↓
+Source Connector → DocumentStore
+                   ├─ raw/sha256/...   原始 HTML / XML / PDF
+                   └─ text/sha256/...  规范文本
 
-PostgreSQL                 Object Storage（下一阶段）
-结构化事实 / RLS           HTML / PDF / JSON 原件
+PostgreSQL
+├─ 结构化经营事实 / RLS
+└─ SourceFetch / SourceDocument 版本索引
 
-Search / Entity Layer（下一阶段）
+Search / Entity Layer（后续）
 ```
 
 短期坚持**模块化单体 + 独立 Worker**，不为了形式上的“生产级”过早微服务化。
@@ -90,6 +102,7 @@ Search / Entity Layer（下一阶段）
 3. **Score 不是精确中标概率**：评分用于经营资源排序和风险暴露。
 4. **正式机会必须人工确认**：自动发现先进入 Draft，确认后才进入正式机会池。
 5. **生产故障显式失败**：Production 禁止静默回退 Demo 数据。
+6. **原件不可变、索引可演进**：外部原始字节按哈希保存，后续抽取规则和 AI 模型可以重新计算。
 
 ## 本地开发
 
@@ -117,18 +130,18 @@ uv run zhituo-api seed
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-详细说明见 [DEVELOPMENT.md](DEVELOPMENT.md)。
+开发环境默认把归档原件写入 `./data/objects`；生产环境必须配置 S3-compatible DocumentStore。详细说明见 [DEVELOPMENT.md](DEVELOPMENT.md) 和 [.env.example](.env.example)。
 
 ## 当前下一阶段
 
 Production Alpha 下一大步按以下顺序推进：
 
-1. **Object Storage**：保存 HTML / PDF / JSON 原件，建立内容寻址与去重；
-2. **Scheduled Source Scan**：Connector 配置、周期扫描、增量抓取；
-3. **Candidate Pipeline**：新增文档 → 去重 → 项目识别 → 候选机会 → 人工确认；
-4. **Entity Resolution**：客户、融资方、竞争对手、合作伙伴独立实体化；
-5. **Search / Knowledge Layer**：跨项目、客户、国别和历史经营知识检索；
-6. **真实 Action / Reminder / Approval**：把经营建议推进为多人协同工作流。
+1. **Scheduled Source Scan**：来源订阅、周期扫描、ETag / Last-Modified 增量抓取、Source Health；
+2. **Candidate Pipeline**：新增文档版本 → 项目识别 → 候选机会 → 人工确认；
+3. **Entity Resolution**：客户、融资方、竞争对手、合作伙伴独立实体化；
+4. **Search / Knowledge Layer**：跨项目、客户、国别和历史经营知识检索；
+5. **真实 Action / Reminder / Approval**：把经营建议推进为多人协同工作流；
+6. **OCR / 高成本连接器**：在核心闭环稳定后再接扫描 PDF、浏览器自动化和登录态来源。
 
 ## 核心文档
 
@@ -137,7 +150,7 @@ Production Alpha 下一大步按以下顺序推进：
 - [生产就绪基线](docs/PRODUCTION_READINESS.md)
 - [生产架构](docs/PRODUCTION_ARCHITECTURE.md)
 - [生产部署](docs/PRODUCTION_DEPLOYMENT.md)
-- [Source Connector 设计](docs/SOURCE_CONNECTORS.md)
+- [Source Connector 与文档归档设计](docs/SOURCE_CONNECTORS.md)
 - [SLO 与监控](docs/SLO_AND_MONITORING.md)
 - [运维手册](docs/OPERATIONS_RUNBOOK.md)
 
