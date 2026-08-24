@@ -95,6 +95,9 @@ def test_postgres_rls_blocks_cross_tenant_candidate_processing_reads_and_writes(
         organization_id=org_b,
         marker="b",
     )
+    fetch_a_id, fetch_b_id = fetch_a.id, fetch_b.id
+    doc_a_id, doc_b_id = doc_a.id, doc_b.id
+    candidate_a_id, candidate_b_id = candidate_a.id, candidate_b.id
 
     admin_engine = create_engine(settings.database_url, pool_pre_ping=True)
     runtime_engine = None
@@ -142,11 +145,13 @@ def test_postgres_rls_blocks_cross_tenant_candidate_processing_reads_and_writes(
             )
             visible = connection.execute(
                 text("SELECT id FROM candidate_processing WHERE id IN (:a, :b) ORDER BY id"),
-                {"a": candidate_a.id, "b": candidate_b.id},
+                {"a": candidate_a_id, "b": candidate_b_id},
             ).scalars().all()
-            assert visible == [candidate_a.id]
+            assert visible == [candidate_a_id]
 
-            with pytest.raises(DBAPIError):
+            # Reference org A's visible SourceDocument but attempt to write the candidate row as
+            # org B. The only intended rejection boundary here is candidate_processing WITH CHECK.
+            with pytest.raises(DBAPIError, match="row-level security"):
                 connection.execute(
                     text(
                         """
@@ -162,7 +167,7 @@ def test_postgres_rls_blocks_cross_tenant_candidate_processing_reads_and_writes(
                     {
                         "id": f"forbidden-{suffix}",
                         "org": org_b,
-                        "source_document_id": doc_b.id,
+                        "source_document_id": doc_a_id,
                     },
                 )
             connection.rollback()
@@ -173,9 +178,9 @@ def test_postgres_rls_blocks_cross_tenant_candidate_processing_reads_and_writes(
             )
             visible = connection.execute(
                 text("SELECT id FROM candidate_processing WHERE id IN (:a, :b) ORDER BY id"),
-                {"a": candidate_a.id, "b": candidate_b.id},
+                {"a": candidate_a_id, "b": candidate_b_id},
             ).scalars().all()
-            assert visible == [candidate_b.id]
+            assert visible == [candidate_b_id]
     finally:
         if runtime_engine is not None:
             runtime_engine.dispose()
@@ -185,15 +190,15 @@ def test_postgres_rls_blocks_cross_tenant_candidate_processing_reads_and_writes(
                 connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
             connection.execute(
                 text("DELETE FROM candidate_processing WHERE id IN (:a, :b)"),
-                {"a": candidate_a.id, "b": candidate_b.id},
+                {"a": candidate_a_id, "b": candidate_b_id},
             )
             connection.execute(
                 text("DELETE FROM source_documents WHERE id IN (:a, :b)"),
-                {"a": doc_a.id, "b": doc_b.id},
+                {"a": doc_a_id, "b": doc_b_id},
             )
             connection.execute(
                 text("DELETE FROM source_fetches WHERE id IN (:a, :b)"),
-                {"a": fetch_a.id, "b": fetch_b.id},
+                {"a": fetch_a_id, "b": fetch_b_id},
             )
             connection.execute(
                 text("DELETE FROM organizations WHERE id IN (:a, :b)"),
