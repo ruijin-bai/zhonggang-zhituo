@@ -26,5 +26,9 @@ class HtmlConnector:
         return ConnectorResult(
             connector=self.kind,
             source_url=resource.url,
+            source_content_type=resource.content_type or "text/html",
+            source_raw_sha256=document.raw_sha256,
+            source_raw_size_bytes=len(resource.body),
             documents=[document],
+            raw_objects={document.raw_sha256: resource.body},
         )

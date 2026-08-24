@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     idempotency_ttl_seconds: int = 86400
     job_stuck_after_seconds: int = 300
 
+    # Content-addressed document storage. Production uses S3-compatible object storage;
+    # local is intentionally limited to development/test.
+    document_store_backend: Literal["local", "s3"] = "local"
+    document_store_local_path: str = "./data/objects"
+    document_store_s3_bucket: str = ""
+    document_store_s3_region: str = "us-east-1"
+    document_store_s3_endpoint_url: str = ""
+    document_store_s3_force_path_style: bool = False
+    document_store_s3_sse: Literal["", "AES256", "aws:kms"] = ""
+    document_store_s3_kms_key_id: str = ""
+
     # Observability. Metrics are opt-in so an internal endpoint is never exposed accidentally.
     log_level: str = "INFO"
     request_id_header: str = "X-Request-ID"
@@ -70,6 +81,8 @@ class Settings(BaseSettings):
             raise ValueError("AUTHENTICATED_RATE_LIMIT_PER_MINUTE cannot be negative")
         if self.job_stuck_after_seconds <= self.celery_task_time_limit_seconds:
             raise ValueError("JOB_STUCK_AFTER_SECONDS must exceed CELERY_TASK_TIME_LIMIT_SECONDS")
+        if self.document_store_s3_sse == "aws:kms" and not self.document_store_s3_kms_key_id:
+            raise ValueError("aws:kms document storage requires DOCUMENT_STORE_S3_KMS_KEY_ID")
 
         if self.app_env == "production":
             if self.data_backend != "database":
@@ -104,6 +117,14 @@ class Settings(BaseSettings):
                 raise ValueError("production REDIS_URL must point to an explicit production Redis service")
             if self.dev_user_email != "admin@zhituo.local":
                 raise ValueError("DEV_USER_EMAIL is a development-only setting")
+            if self.document_store_backend != "s3":
+                raise ValueError("production requires DOCUMENT_STORE_BACKEND=s3")
+            if not self.document_store_s3_bucket:
+                raise ValueError("production S3 document storage requires DOCUMENT_STORE_S3_BUCKET")
+            if self.document_store_s3_endpoint_url and not self._is_https_url(
+                self.document_store_s3_endpoint_url
+            ):
+                raise ValueError("production custom S3 endpoint must use HTTPS")
         return self
 
     @property

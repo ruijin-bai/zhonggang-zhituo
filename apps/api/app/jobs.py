@@ -22,10 +22,12 @@ from .job_registry import (
 from .models import DiscoverRequest, SourceIngestRequest
 from .radar import BatchScanRequest
 from .security import Principal, require_role
+from .source_archive import SourceFetchRequest, list_archived_documents
 from .tasks import (
     discovery_batch_task,
     discovery_scan_task,
     opportunity_analyze_task,
+    source_fetch_archive_task,
     source_ingest_task,
     strategy_generate_task,
     strategy_red_team_task,
@@ -38,6 +40,7 @@ RETRYABLE_TASKS = {
     for task in (
         discovery_scan_task,
         discovery_batch_task,
+        source_fetch_archive_task,
         source_ingest_task,
         opportunity_analyze_task,
         strategy_generate_task,
@@ -200,6 +203,42 @@ def submit_discovery_batch(
     )
     _audit_submission(db, request, principal, result, {"items": len(body.items)})
     return result
+
+
+@router.post("/sources/fetch", response_model=JobSubmission, status_code=202)
+def submit_source_fetch(
+    body: SourceFetchRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_role("analyst")),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> JobSubmission:
+    result = _enqueue(
+        source_fetch_archive_task,
+        args=(body.model_dump(mode="json"), principal.organization_id),
+        job_type="source.fetch_archive",
+        principal=principal,
+        request=request,
+        db=db,
+        idempotency_key=idempotency_key,
+    )
+    _audit_submission(
+        db,
+        request,
+        principal,
+        result,
+        {"connector": body.connector, "url": body.url},
+    )
+    return result
+
+
+@router.get("/sources/documents")
+def archived_source_documents(
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_role("viewer")),
+) -> list[dict]:
+    return list_archived_documents(db, limit=limit)
 
 
 @router.post("/sources/ingest", response_model=JobSubmission, status_code=202)

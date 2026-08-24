@@ -13,6 +13,7 @@ from .metrics import set_stale_queued_jobs
 from .models import DiscoverRequest, SourceIngestRequest
 from .radar import BatchScanRequest, batch_scan
 from .repository import get_opportunity
+from .source_archive import SourceFetchRequest, fetch_and_archive_source
 from .strategy import get_strategy
 from .strategy_ai import generate_strategy, red_team
 from .tracked_task import TrackedTask
@@ -67,6 +68,18 @@ def discovery_batch_task(self, payload: dict, organization_id: str) -> dict:
             return _json(result)
     except SoftTimeLimitExceeded as exc:
         raise RuntimeError("批量商机扫描任务超过软超时限制") from exc
+
+
+@celery_app.task(bind=True, base=TrackedTask, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.source.fetch_archive")
+def source_fetch_archive_task(self, payload: dict, organization_id: str) -> dict:
+    try:
+        with _tenant_session(organization_id) as session:
+            result = asyncio.run(
+                fetch_and_archive_source(SourceFetchRequest.model_validate(payload), session)
+            )
+            return _json(result)
+    except SoftTimeLimitExceeded as exc:
+        raise RuntimeError("外部来源抓取归档任务超过软超时限制") from exc
 
 
 @celery_app.task(bind=True, base=TrackedTask, autoretry_for=(ConnectionError,), retry_backoff=True, retry_kwargs={"max_retries": 3}, name="zhituo.source.ingest")

@@ -26,7 +26,7 @@ npm run dev:web
 docker compose up -d db redis
 ```
 
-PostgreSQL 保存业务事实；Redis 用作 Celery broker、任务结果与短期 Job 元数据存储。
+PostgreSQL 保存业务事实和外部来源版本索引；Redis 用作 Celery broker、任务结果与短期 Job 元数据存储。
 
 ## 4. API
 
@@ -100,7 +100,7 @@ REDIS_URL=redis://<redis-host>:6379/0
 
 此时旧同步长任务接口返回 `409`，调用方必须使用 `/api/jobs/...`。
 
-## 6. Source Connectors
+## 6. Source Connectors 与 DocumentStore
 
 当前首批统一外部来源连接器：
 
@@ -108,13 +108,54 @@ REDIS_URL=redis://<redis-host>:6379/0
 - `rss`：RSS / Atom；
 - `pdf`：带文本层 PDF。
 
-连接器统一输出 `SourceDocument`，设计见 `docs/SOURCE_CONNECTORS.md`。
+连接器统一输出 `SourceDocument`，再进入内容寻址 DocumentStore 与 PostgreSQL 来源版本索引。设计见 `docs/SOURCE_CONNECTORS.md`。
 
-运行 Connector 相关单测：
+### 本地开发存储
+
+默认配置：
+
+```bash
+DOCUMENT_STORE_BACKEND=local
+DOCUMENT_STORE_LOCAL_PATH=./data/objects
+```
+
+原件和规范文本分别进入：
+
+```text
+raw/sha256/...
+text/sha256/...
+```
+
+相同内容重复归档不会产生第二份对象。
+
+### 生产存储
+
+生产模式强制 S3-compatible：
+
+```bash
+DOCUMENT_STORE_BACKEND=s3
+DOCUMENT_STORE_S3_BUCKET=zhituo-production-documents
+DOCUMENT_STORE_S3_REGION=<region>
+# AWS S3 可不填 endpoint；兼容服务必须使用 HTTPS。
+DOCUMENT_STORE_S3_ENDPOINT_URL=
+DOCUMENT_STORE_S3_FORCE_PATH_STYLE=false
+DOCUMENT_STORE_S3_SSE=AES256
+```
+
+如使用 KMS：
+
+```bash
+DOCUMENT_STORE_S3_SSE=aws:kms
+DOCUMENT_STORE_S3_KMS_KEY_ID=<key-id-or-alias>
+```
+
+凭证使用 boto3/AWS SDK 标准 credential chain，不在仓库或智拓自定义配置中保存 Access Key。
+
+### Connector / Archive 单测
 
 ```bash
 cd apps/api
-uv run pytest -q tests/test_connectors.py
+uv run pytest -q tests/test_connectors.py tests/test_document_store.py tests/test_source_archive.py
 ```
 
 扫描 PDF 如果没有文本层会明确提示后续需要 OCR，不在同步请求中自动执行高成本 OCR。
@@ -125,12 +166,19 @@ uv run pytest -q tests/test_connectors.py
 
 - `POST /api/jobs/discovery/scan`
 - `POST /api/jobs/discovery/batch`
-- `POST /api/jobs/sources/ingest`
+- `POST /api/jobs/sources/fetch`：抓取 HTML/RSS/PDF 并归档原件与规范文档；
+- `POST /api/jobs/sources/ingest`：现有机会的情报抽取/重评链；
 - `POST /api/jobs/opportunities/{id}/analyze`
 - `POST /api/jobs/opportunities/{id}/strategy/generate`
 - `POST /api/jobs/opportunities/{id}/strategy/red-team`
 
-查询：
+查看已归档规范文档：
+
+```http
+GET /api/jobs/sources/documents?limit=100
+```
+
+查询 Job：
 
 ```http
 GET /api/jobs/{job_id}
@@ -157,7 +205,7 @@ X-Zhituo-User: admin@zhituo.local
 角色：
 
 - `viewer`：只读；
-- `analyst`：扫描、分析、跟踪、提交 AI Job；
+- `analyst`：扫描、分析、跟踪、提交 AI / Source Job；
 - `manager`：确认商机入池、修改经营策略；
 - `admin`：管理能力。
 
@@ -174,7 +222,7 @@ AI_MODEL_EXTRACTION=<structured-output-model>
 AI_MODEL_ANALYSIS=<analysis-model>
 ```
 
-模型失败时允许确定性抽取或模板化分析降级；已经写入的 Source / Evidence 不因模型失败而损坏。
+模型失败时允许确定性抽取或模板化分析降级；已经归档的原件和 Source / Evidence 不因模型失败而损坏。
 
 ## 10. Demo fallback 与生产隔离
 
@@ -217,9 +265,11 @@ JOB_MODE=queue
 DATABASE_RLS_ENABLED=true
 DATABASE_URL=postgresql+psycopg://...
 REDIS_URL=redis://...
+DOCUMENT_STORE_BACKEND=s3
+DOCUMENT_STORE_S3_BUCKET=...
 ```
 
-生产环境禁止静默 Demo fallback、禁止同步执行网页抓取和 AI 长任务。
+生产环境禁止静默 Demo fallback、禁止同步执行网页抓取和 AI 长任务、禁止使用本地文件系统保存正式来源原件。
 
 ## 13. 本地质量检查
 
@@ -252,9 +302,11 @@ docker build -f apps/web/Dockerfile -t zhituo-web:local .
 - Demo 数据与生产数据明确隔离；
 - 新发现项目先进入 Draft；
 - 关键事实绑定 Source / Evidence；
+- 原始外部文档按内容哈希不可变归档；
+- PostgreSQL 保存版本、租户关系和业务事实，不保存大块原件；
 - 分数由规则引擎计算，AI 不直接覆盖总分；
 - AI 输出采用结构化 Schema；
 - ScoreSnapshot / Event / AuditLog 保留变化历史；
 - 长任务进入 Queue，可重试、可查询、可超时；
-- 外部文档先经过 Connector 标准化，再进入识别/证据管线；
+- 外部文档先经过 Connector 标准化和归档，再进入识别/证据管线；
 - 系统允许 Unknown，不通过 AI 补造经营事实。

@@ -30,6 +30,8 @@ def _production_settings(**overrides):
         "auth_proxy_secret": PROXY_SECRET,
         "job_mode": "queue",
         "redis_url": "redis://redis.internal:6379/0",
+        "document_store_backend": "s3",
+        "document_store_s3_bucket": "zhituo-production-documents",
     }
     values.update(overrides)
     return Settings(**values)
@@ -51,6 +53,7 @@ def test_production_accepts_safe_trusted_proxy_baseline() -> None:
     assert settings.job_mode == "queue"
     assert settings.data_backend == "database"
     assert settings.database_rls_enabled is True
+    assert settings.document_store_backend == "s3"
 
 
 def test_production_accepts_oidc_without_proxy_secret() -> None:

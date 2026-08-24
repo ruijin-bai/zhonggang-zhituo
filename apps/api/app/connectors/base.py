@@ -24,9 +24,15 @@ class SourceDocument(BaseModel):
 
 
 class ConnectorResult(BaseModel):
+    """Serializable connector metadata plus transient raw bytes for archival."""
+
     connector: str
     source_url: str
+    source_content_type: str
+    source_raw_sha256: str
+    source_raw_size_bytes: int
     documents: list[SourceDocument]
+    raw_objects: dict[str, bytes] = Field(default_factory=dict, exclude=True, repr=False)
 
 
 class SourceConnector(Protocol):

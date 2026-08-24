@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from email.utils import parsedate_to_datetime
+from hashlib import sha256
 from xml.etree import ElementTree
 
 from .base import ConnectorResult, SourceDocument, build_document
@@ -146,8 +147,13 @@ class RssConnector:
             ),
         )
         documents = parse_feed_resource(resource)
+        raw_digest = sha256(resource.body).hexdigest()
         return ConnectorResult(
             connector=self.kind,
             source_url=resource.url,
+            source_content_type=resource.content_type or "application/xml",
+            source_raw_sha256=raw_digest,
+            source_raw_size_bytes=len(resource.body),
             documents=documents,
+            raw_objects={raw_digest: resource.body},
         )
