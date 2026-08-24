@@ -81,11 +81,19 @@ def _ensure_reminder(
         )
         session.add(row)
     else:
+        previous_escalation_level = row.escalation_level
         if row.status == "resolved":
             row.status = "open"
             row.resolved_at = None
             row.acknowledged_at = None
             row.occurrence_count += 1
+            row.last_triggered_at = now
+        elif escalation_level > previous_escalation_level and row.status == "acknowledged":
+            # Acknowledgement means the original recipient saw the condition; it does not
+            # acknowledge a later escalation to the workspace lead. Re-open the same durable
+            # reminder without counting a new occurrence of the underlying business condition.
+            row.status = "open"
+            row.acknowledged_at = None
             row.last_triggered_at = now
         row.workspace_id = workspace.id
         row.opportunity_id = workspace.opportunity_id
