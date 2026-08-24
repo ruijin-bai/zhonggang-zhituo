@@ -1,9 +1,18 @@
 # 本地开发
 
-## 1. Web
+## 1. 依赖锁原则
+
+主线使用两份提交到仓库的依赖锁：
+
+- Web：根目录 `package-lock.json`；
+- API：`apps/api/uv.lock`。
+
+开发、CI 和生产镜像都应消费锁文件。正常开发不要用 `npm install` 或无锁 `pip install .` 重新解析生产依赖；依赖升级应显式修改声明并更新锁文件。
+
+## 2. Web
 
 ```bash
-npm install
+npm ci
 npm run dev:web
 ```
 
@@ -11,7 +20,7 @@ npm run dev:web
 
 开发/比赛演示模式可保留 Demo fallback。生产模式必须关闭 fallback，避免 API 故障时向经营人员展示模拟数据。
 
-## 2. PostgreSQL + Redis
+## 3. PostgreSQL + Redis
 
 ```bash
 docker compose up -d db redis
@@ -19,17 +28,15 @@ docker compose up -d db redis
 
 PostgreSQL 保存业务事实；Redis 用作 Celery broker、任务结果与短期 Job 元数据存储。
 
-## 3. API
+## 4. API
 
 ```bash
 cd apps/api
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
-pip install -e '.[dev]'
-alembic upgrade head
-zhituo-api seed
-uvicorn app.main:app --reload --port 8000
+python -m pip install 'uv>=0.8,<1'
+uv sync --locked --extra dev
+uv run alembic upgrade head
+uv run zhituo-api seed
+uv run uvicorn app.main:app --reload --port 8000
 ```
 
 开发 seed 会创建 `admin@zhituo.local` 管理员身份和演示组织。首次演示时，英雄项目刻意初始化为 **72/B**，后续由情报重评链真实推进到 **81/A**。
@@ -38,7 +45,7 @@ uvicorn app.main:app --reload --port 8000
 
 ```bash
 cd apps/api
-zhituo-api reset-demo
+uv run zhituo-api reset-demo
 ```
 
 `reset-demo` 只删除 `is_demo=true` 的演示业务数据，再重新 seed：
@@ -50,45 +57,41 @@ zhituo-api reset-demo
 - `is_demo=false` 的公开/真实项目不会被删除；
 - 演示组织和开发身份保持不变。
 
-因此每次正式录屏前建议执行：
+正式录屏前建议：
 
 ```bash
 docker compose up -d db redis
 cd apps/api
-alembic upgrade head
-zhituo-api reset-demo
-zhituo-api status
-uvicorn app.main:app --port 8000
+uv run alembic upgrade head
+uv run zhituo-api reset-demo
+uv run zhituo-api status
+uv run uvicorn app.main:app --port 8000
 ```
 
 随后另开终端启动 Web。
 
-## 4. Celery Worker
+## 5. Celery Worker / Beat
 
-另开终端：
+Worker：
 
 ```bash
 cd apps/api
-# 激活同一个虚拟环境
-celery -A app.celery_app:celery_app worker --loglevel=INFO
+uv run celery -A app.celery_app:celery_app worker --loglevel=INFO
 ```
 
-Linux 生产环境保持默认 prefork；本地 Windows 如 prefork 不稳定，可仅在开发环境使用：
+本地 Windows 如 prefork 不稳定，可仅在开发环境使用：
 
 ```bash
-celery -A app.celery_app:celery_app worker --loglevel=INFO --pool=solo
+uv run celery -A app.celery_app:celery_app worker --loglevel=INFO --pool=solo
 ```
 
-当前队列任务包括：
+Beat：
 
-- 商机单条扫描
-- 商机批量扫描
-- 情报抽取与自动重评
-- AI 项目经营研判
-- 赢标策略生成
-- 红队挑战
+```bash
+uv run celery -A app.celery_app:celery_app beat --loglevel=INFO
+```
 
-生产环境必须：
+生产环境必须使用：
 
 ```bash
 JOB_MODE=queue
@@ -97,7 +100,26 @@ REDIS_URL=redis://<redis-host>:6379/0
 
 此时旧同步长任务接口返回 `409`，调用方必须使用 `/api/jobs/...`。
 
-## 5. 异步 Job API
+## 6. Source Connectors
+
+当前首批统一外部来源连接器：
+
+- `html`：网页/纯文本；
+- `rss`：RSS / Atom；
+- `pdf`：带文本层 PDF。
+
+连接器统一输出 `SourceDocument`，设计见 `docs/SOURCE_CONNECTORS.md`。
+
+运行 Connector 相关单测：
+
+```bash
+cd apps/api
+uv run pytest -q tests/test_connectors.py
+```
+
+扫描 PDF 如果没有文本层会明确提示后续需要 OCR，不在同步请求中自动执行高成本 OCR。
+
+## 7. 异步 Job API
 
 提交任务：
 
@@ -108,26 +130,15 @@ REDIS_URL=redis://<redis-host>:6379/0
 - `POST /api/jobs/opportunities/{id}/strategy/generate`
 - `POST /api/jobs/opportunities/{id}/strategy/red-team`
 
-返回：
-
-```json
-{
-  "job_id": "...",
-  "job_type": "discovery.scan",
-  "state": "PENDING",
-  "status_url": "/api/jobs/..."
-}
-```
-
 查询：
 
 ```http
 GET /api/jobs/{job_id}
 ```
 
-状态通常为 `PENDING / STARTED / SUCCESS / FAILURE / RETRY`。Job 元数据绑定 Organization，其他组织不能读取结果。结果默认保留 24 小时，可通过 `CELERY_RESULT_EXPIRES_SECONDS` 调整。
+Job 元数据绑定 Organization，其他组织不能读取结果。长期任务事实写入 PostgreSQL `background_jobs`，不依赖 Redis Result 的保留周期。
 
-## 6. 身份与权限
+## 8. 身份与权限
 
 开发模式默认使用：
 
@@ -135,24 +146,24 @@ GET /api/jobs/{job_id}
 DEV_USER_EMAIL=admin@zhituo.local
 ```
 
-也可以通过请求头模拟已认证身份：
+也可以通过请求头模拟开发身份：
 
 ```http
 X-Zhituo-User: admin@zhituo.local
 ```
 
-该请求头当前只是开发/可信网关适配层，不是生产登录方案。生产环境应由 SSO/OIDC 或企业身份网关提供可信身份。
+生产禁止 `development_header`，应使用 OIDC 或 trusted proxy 企业身份网关。
 
 角色：
 
-- `viewer`：只读
-- `analyst`：扫描、分析、跟踪、提交 AI Job
-- `manager`：确认商机入池、修改经营策略
-- `admin`：管理基础
+- `viewer`：只读；
+- `analyst`：扫描、分析、跟踪、提交 AI Job；
+- `manager`：确认商机入池、修改经营策略；
+- `admin`：管理能力。
 
-关键写操作与 Job 提交进入 `audit_logs`。
+关键写操作与 Job 提交进入 Audit Log。
 
-## 7. AI 模型
+## 9. AI 模型
 
 AI 是可选增强，不是事实数据单点故障。模型名不在仓库中硬编码：
 
@@ -163,29 +174,27 @@ AI_MODEL_EXTRACTION=<structured-output-model>
 AI_MODEL_ANALYSIS=<analysis-model>
 ```
 
-模型失败时，允许确定性抽取或模板化分析降级；已经写入的 Source / Evidence 不因模型失败而损坏。
+模型失败时允许确定性抽取或模板化分析降级；已经写入的 Source / Evidence 不因模型失败而损坏。
 
-## 8. 演示 fallback 与生产隔离
+## 10. Demo fallback 与生产隔离
 
-比赛/开发环境可以设置：
+开发/演示可设置：
 
 ```bash
 ALLOW_DEMO_FALLBACK=true
 NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=true
 ```
 
-此时 API、AI 或外网不可用时，市场雷达、机会池、情报重评、跟踪、策略、红队和作战卡仍可使用明确标识的离线演示结果。
-
-生产环境必须设置：
+生产必须设置：
 
 ```bash
 ALLOW_DEMO_FALLBACK=false
 NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=false
 ```
 
-前端和后端都必须尊重这一开关；生产故障应显式报错，不能静默展示 Demo 数据。
+生产故障应显式报错，不能静默展示 Demo 数据。
 
-## 9. 自动重评安全阈值
+## 11. 自动重评安全阈值
 
 只有同时满足以下条件，来源事实才允许自动修改评分：
 
@@ -196,9 +205,7 @@ NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=false
 
 否则来源只保存为 Evidence，不自动改变经营等级。
 
-## 10. 生产模式基线
-
-生产环境至少需要：
+## 12. 生产模式基线
 
 ```bash
 APP_ENV=production
@@ -207,13 +214,40 @@ ALLOW_DEMO_FALLBACK=false
 NEXT_PUBLIC_ALLOW_DEMO_FALLBACK=false
 DATA_BACKEND=database
 JOB_MODE=queue
+DATABASE_RLS_ENABLED=true
 DATABASE_URL=postgresql+psycopg://...
 REDIS_URL=redis://...
 ```
 
-生产环境禁止本地数据库/Redis 地址、禁止静默 Demo fallback、禁止同步执行网页抓取和 AI 长任务。
+生产环境禁止静默 Demo fallback、禁止同步执行网页抓取和 AI 长任务。
 
-## 11. 工程原则
+## 13. 本地质量检查
+
+API：
+
+```bash
+cd apps/api
+uv sync --locked --extra dev
+uv run python -m compileall -q app
+uv run pytest -q
+```
+
+Web：
+
+```bash
+npm ci
+npm --workspace apps/web run check
+npm --workspace apps/web run build
+```
+
+生产镜像：
+
+```bash
+docker build -t zhituo-api:local apps/api
+docker build -f apps/web/Dockerfile -t zhituo-web:local .
+```
+
+## 14. 工程原则
 
 - Demo 数据与生产数据明确隔离；
 - 新发现项目先进入 Draft；
@@ -222,4 +256,5 @@ REDIS_URL=redis://...
 - AI 输出采用结构化 Schema；
 - ScoreSnapshot / Event / AuditLog 保留变化历史；
 - 长任务进入 Queue，可重试、可查询、可超时；
+- 外部文档先经过 Connector 标准化，再进入识别/证据管线；
 - 系统允许 Unknown，不通过 AI 补造经营事实。
