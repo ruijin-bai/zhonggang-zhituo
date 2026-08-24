@@ -20,6 +20,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span className={`badge badge-${item.grade.toLowerCase()}`}>{item.grade} 级</span>
           <Link className="primary-button" href={`/knowledge/opportunities/${encodeURIComponent(item.id)}`}>360°知识视图</Link>
+          <Link className="primary-button" href={`/pursuit/opportunities/${encodeURIComponent(item.id)}`}>进入经营协同</Link>
         </div>
       </header>
 
