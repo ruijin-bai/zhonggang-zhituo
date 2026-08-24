@@ -8,14 +8,20 @@ from .audit import write_audit
 from .candidate_db import CandidateProcessingRecord
 from .candidate_pipeline import list_candidate_processing
 from .db import OpportunityDraftRecord, get_db, utc_now
+from .intelligence import candidate_intelligence_summary
 from .models import ProjectDiscovery
 from .security import Principal, require_role
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
 
-def _draft_to_dict(row: OpportunityDraftRecord, processing: CandidateProcessingRecord | None) -> dict:
+def _draft_to_dict(
+    row: OpportunityDraftRecord,
+    processing: CandidateProcessingRecord | None,
+    session: Session,
+) -> dict:
     discovery = ProjectDiscovery.model_validate(row.discovery)
+    intelligence = candidate_intelligence_summary(session, row.id)
     return {
         "id": row.id,
         "status": row.status,
@@ -28,6 +34,9 @@ def _draft_to_dict(row: OpportunityDraftRecord, processing: CandidateProcessingR
         "duplicate_matches": row.duplicate_matches or [],
         "source_document_id": processing.source_document_id if processing else None,
         "processing_id": processing.id if processing else None,
+        "source_count": intelligence["source_count"],
+        "source_document_ids": intelligence["source_document_ids"],
+        "entities": intelligence["entities"],
         "created_at": row.created_at.isoformat(),
         "updated_at": row.updated_at.isoformat(),
     }
@@ -54,7 +63,7 @@ def candidate_inbox(
         statement = statement.where(OpportunityDraftRecord.status == status)
     rows = db.scalars(statement.limit(limit)).all()
     processing = _processing_by_draft(db, [row.id for row in rows])
-    return [_draft_to_dict(row, processing.get(row.id)) for row in rows]
+    return [_draft_to_dict(row, processing.get(row.id), db) for row in rows]
 
 
 @router.get("/processing")
@@ -78,7 +87,7 @@ def candidate_detail(
     processing = db.scalar(
         select(CandidateProcessingRecord).where(CandidateProcessingRecord.draft_id == draft_id)
     )
-    return _draft_to_dict(row, processing)
+    return _draft_to_dict(row, processing, db)
 
 
 @router.post("/{draft_id}/reject")
