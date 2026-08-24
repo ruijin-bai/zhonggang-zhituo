@@ -1,5 +1,6 @@
 import ipaddress
 import socket
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
@@ -8,6 +9,14 @@ import httpx
 MAX_PAGE_BYTES = 2_000_000
 MAX_REDIRECTS = 3
 ALLOWED_CONTENT_TYPES = ("text/html", "text/plain", "application/xhtml+xml")
+
+
+@dataclass(frozen=True)
+class PublicResource:
+    url: str
+    content_type: str
+    body: bytes
+    encoding: str
 
 
 class _TextExtractor(HTMLParser):
@@ -54,6 +63,12 @@ class _TextExtractor(HTMLParser):
         return title, text
 
 
+def html_to_text(raw: str) -> tuple[str, str]:
+    parser = _TextExtractor()
+    parser.feed(raw)
+    return parser.output()
+
+
 def _ip_is_public(value: str) -> bool:
     ip = ipaddress.ip_address(value)
     return not (
@@ -86,7 +101,11 @@ def validate_public_url(url: str) -> str:
             addresses = list(
                 {
                     item[4][0]
-                    for item in socket.getaddrinfo(hostname, parsed.port or 443, type=socket.SOCK_STREAM)
+                    for item in socket.getaddrinfo(
+                        hostname,
+                        parsed.port or 443,
+                        type=socket.SOCK_STREAM,
+                    )
                 }
             )
         except socket.gaierror as exc:
@@ -97,40 +116,75 @@ def validate_public_url(url: str) -> str:
     return url
 
 
-async def fetch_public_page(url: str) -> tuple[str, str, str]:
+async def fetch_public_resource(
+    url: str,
+    *,
+    max_bytes: int,
+    accept: str = "*/*",
+    timeout_seconds: float = 20.0,
+) -> PublicResource:
+    """Fetch a bounded public resource while preserving the existing SSRF boundary."""
+
     current = validate_public_url(url)
     headers = {
-        "User-Agent": "Zhonggang-Zhituo/0.3 (+market-intelligence; public-page-reader)",
-        "Accept": "text/html,text/plain;q=0.9,*/*;q=0.1",
+        "User-Agent": "Zhonggang-Zhituo/0.14 (+market-intelligence; public-source-reader)",
+        "Accept": accept,
     }
 
-    async with httpx.AsyncClient(timeout=20.0, follow_redirects=False, headers=headers) as client:
+    async with httpx.AsyncClient(
+        timeout=timeout_seconds,
+        follow_redirects=False,
+        headers=headers,
+    ) as client:
         for _ in range(MAX_REDIRECTS + 1):
-            response = await client.get(current)
-            if response.status_code in {301, 302, 303, 307, 308}:
-                location = response.headers.get("location")
-                if not location:
-                    raise ValueError("网页重定向缺少目标地址")
-                current = validate_public_url(urljoin(current, location))
-                continue
+            async with client.stream("GET", current) as response:
+                if response.status_code in {301, 302, 303, 307, 308}:
+                    location = response.headers.get("location")
+                    if not location:
+                        raise ValueError("网页重定向缺少目标地址")
+                    current = validate_public_url(urljoin(current, location))
+                    continue
 
-            response.raise_for_status()
-            content_type = response.headers.get("content-type", "").lower()
-            if content_type and not any(kind in content_type for kind in ALLOWED_CONTENT_TYPES):
-                raise ValueError("当前 URL 不是可解析的公开网页文本")
-            body = response.content[: MAX_PAGE_BYTES + 1]
-            if len(body) > MAX_PAGE_BYTES:
-                raise ValueError("网页正文过大，超过 2MB 安全限制")
-            encoding = response.encoding or "utf-8"
-            raw = body.decode(encoding, errors="replace")
-            if "html" in content_type or "<html" in raw[:1000].lower():
-                parser = _TextExtractor()
-                parser.feed(raw)
-                title, text = parser.output()
-            else:
-                title, text = "", "\n".join(line.strip() for line in raw.splitlines() if line.strip())
-            if len(text) < 40:
-                raise ValueError("网页正文过短，无法形成可靠项目识别")
-            return current, title, text[:100_000]
+                response.raise_for_status()
+                body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    if len(body) + len(chunk) > max_bytes:
+                        raise ValueError(f"公开资源过大，超过 {max_bytes} 字节安全限制")
+                    body.extend(chunk)
+
+                content_type = response.headers.get("content-type", "")
+                content_type = content_type.split(";", 1)[0].strip().lower()
+                return PublicResource(
+                    url=current,
+                    content_type=content_type,
+                    body=bytes(body),
+                    encoding=response.encoding or "utf-8",
+                )
 
     raise ValueError("网页重定向次数过多")
+
+
+def extract_page_text(resource: PublicResource) -> tuple[str, str]:
+    content_type = resource.content_type
+    if content_type and not any(kind in content_type for kind in ALLOWED_CONTENT_TYPES):
+        raise ValueError("当前 URL 不是可解析的公开网页文本")
+
+    raw = resource.body.decode(resource.encoding or "utf-8", errors="replace")
+    if "html" in content_type or "<html" in raw[:1000].lower():
+        title, text = html_to_text(raw)
+    else:
+        title = ""
+        text = "\n".join(line.strip() for line in raw.splitlines() if line.strip())
+    if len(text) < 40:
+        raise ValueError("网页正文过短，无法形成可靠项目识别")
+    return title, text[:100_000]
+
+
+async def fetch_public_page(url: str) -> tuple[str, str, str]:
+    resource = await fetch_public_resource(
+        url,
+        max_bytes=MAX_PAGE_BYTES,
+        accept="text/html,text/plain;q=0.9,*/*;q=0.1",
+    )
+    title, text = extract_page_text(resource)
+    return resource.url, title, text
