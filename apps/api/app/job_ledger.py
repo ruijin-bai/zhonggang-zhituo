@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import BackgroundJobRecord, SessionLocal, set_tenant_context
-from .metrics import observe_job_transition, observe_stuck_reconciled
+from .metrics import (
+    observe_job_duration,
+    observe_job_queue_latency,
+    observe_job_transition,
+    observe_stuck_reconciled,
+)
 from .security import Principal
 
 logger = logging.getLogger("zhituo.jobs")
@@ -72,6 +77,13 @@ def transition_job_record(
         return None
 
     now = _now()
+    first_start = status == "running" and record.started_at is None
+    if first_start and record.submitted_at is not None:
+        observe_job_queue_latency(
+            record.job_type,
+            (now - _as_utc(record.submitted_at)).total_seconds(),
+        )
+
     record.status = status
     if increment_attempt:
         record.attempts += 1
@@ -80,6 +92,12 @@ def transition_job_record(
     if status == "running" and record.started_at is None:
         record.started_at = now
     if status in TERMINAL_JOB_STATES:
+        if record.started_at is not None:
+            observe_job_duration(
+                record.job_type,
+                status,
+                (now - _as_utc(record.started_at)).total_seconds(),
+            )
         record.finished_at = now
     elif status in ACTIVE_JOB_STATES:
         record.finished_at = None
@@ -173,6 +191,12 @@ def reconcile_stuck_jobs(
         reconciled.append(record.id)
         observe_job_transition(record.job_type, "failed")
         observe_stuck_reconciled(record.job_type)
+        if record.started_at is not None:
+            observe_job_duration(
+                record.job_type,
+                "failed",
+                (now - _as_utc(record.started_at)).total_seconds(),
+            )
         logger.warning(
             "background job reconciled as stuck",
             extra={
