@@ -9,6 +9,8 @@ from .db import Base, TenantScopedMixin, utc_now
 
 
 class SourceFetchRecord(TenantScopedMixin, Base):
+    """One distinct raw representation of a source URL, observed one or more times."""
+
     __tablename__ = "source_fetches"
     __table_args__ = (
         UniqueConstraint(
@@ -29,7 +31,9 @@ class SourceFetchRecord(TenantScopedMixin, Base):
     raw_size_bytes: Mapped[int] = mapped_column(Integer)
     raw_object_key: Mapped[str] = mapped_column(String(500))
     storage_backend: Mapped[str] = mapped_column(String(20))
-    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    seen_count: Mapped[int] = mapped_column(Integer, default=1)
+    first_fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    last_fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
 
 class SourceDocumentRecord(TenantScopedMixin, Base):
