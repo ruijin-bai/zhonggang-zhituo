@@ -7,7 +7,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .db import MembershipRecord, OpportunityRecord, UserRecord, utc_now
+from .db import OpportunityRecord, utc_now
 from .pursuit_db import (
     PursuitDecisionGateRecord,
     PursuitGateReviewRecord,
@@ -285,12 +285,18 @@ def reconcile_pursuit_reminders(session: Session, *, now: datetime | None = None
             touched += 1
 
     pending_reviews = session.scalars(
-        select(PursuitGateReviewRecord).where(PursuitGateReviewRecord.status == "pending")
+        select(PursuitGateReviewRecord)
+        .join(
+            PursuitDecisionGateRecord,
+            PursuitDecisionGateRecord.id == PursuitGateReviewRecord.gate_id,
+        )
+        .where(
+            PursuitGateReviewRecord.status == "pending",
+            PursuitDecisionGateRecord.status == "open",
+        )
     ).all()
     for review in pending_reviews:
         gate = gate_by_id.get(review.gate_id)
-        if gate is None:
-            gate = session.get(PursuitDecisionGateRecord, review.gate_id)
         if gate is None:
             continue
         workspace = workspace_by_id.get(gate.workspace_id)
