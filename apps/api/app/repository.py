@@ -10,13 +10,32 @@ from .config import get_settings
 from .db import EvidenceRecord, OpportunityRecord, ScoreSnapshotRecord
 from .models import Evidence, Opportunity, ScoreSnapshot
 
-DATA_FILE = Path(__file__).resolve().parents[3] / "data" / "demo" / "opportunities.json"
 settings = get_settings()
+
+
+def _find_demo_data_file() -> Path:
+    """Resolve demo data lazily without assuming the source-repository directory depth.
+
+    Production containers intentionally do not need or ship Demo data. Importing the API
+    must therefore never depend on a repository-relative `parents[n]` lookup. When a
+    development/demo code path actually requests the JSON fallback, search known ancestors
+    and fail with an actionable message if the asset is not present.
+    """
+    module_path = Path(__file__).resolve()
+    for parent in module_path.parents:
+        candidate = parent / "data" / "demo" / "opportunities.json"
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError(
+        "Demo opportunity data is not available in this runtime. "
+        "Use DATA_BACKEND=database in production or run from the repository checkout."
+    )
 
 
 @lru_cache(maxsize=1)
 def load_demo_opportunities() -> list[Opportunity]:
-    payload = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+    data_file = _find_demo_data_file()
+    payload = json.loads(data_file.read_text(encoding="utf-8"))
     return [Opportunity.model_validate(item) for item in payload]
 
 
