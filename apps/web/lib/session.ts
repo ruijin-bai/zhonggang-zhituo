@@ -24,3 +24,11 @@ export async function getSessionMeta(): Promise<SessionMeta> {
 export function canReviewCandidates(role: SessionMeta["role"]): boolean {
   return role === "manager" || role === "admin";
 }
+
+export function canEditPursuit(role: SessionMeta["role"]): boolean {
+  return role === "analyst" || role === "manager" || role === "admin";
+}
+
+export function canManagePursuit(role: SessionMeta["role"]): boolean {
+  return role === "manager" || role === "admin";
+}
