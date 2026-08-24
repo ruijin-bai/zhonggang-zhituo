@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -9,11 +10,12 @@ from .db import OpportunityEventRecord, OpportunityRecord, PursuitActionRecord
 from .repository import get_opportunity
 
 
-class StrategyVersionConflict(ValueError):
+class StrategyVersionConflict(HTTPException):
     def __init__(self, expected_version: int, current_version: int):
-        super().__init__(
+        detail = (
             f"策略版本冲突：提交基于 V{expected_version}，当前已经是 V{current_version}。请刷新后合并最新修改。"
         )
+        super().__init__(status_code=409, detail=detail)
         self.expected_version = expected_version
         self.current_version = current_version
 
