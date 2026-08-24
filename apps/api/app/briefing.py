@@ -65,7 +65,7 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
         select(func.count())
         .select_from(PursuitActionRecord)
         .where(
-            PursuitActionRecord.status != "completed",
+            PursuitActionRecord.status == "open",
             PursuitActionRecord.due_at.is_not(None),
             PursuitActionRecord.due_at < now,
         )
@@ -74,7 +74,7 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
         select(func.count())
         .select_from(PursuitActionRecord)
         .where(
-            PursuitActionRecord.status != "completed",
+            PursuitActionRecord.status == "open",
             PursuitActionRecord.due_at.is_not(None),
             PursuitActionRecord.due_at >= now,
             PursuitActionRecord.due_at <= due_soon_until,
@@ -100,7 +100,7 @@ def daily_brief(session: Session, *, window_hours: int = 24, limit: int = 8) -> 
     overdue_rows = session.scalars(
         select(PursuitActionRecord)
         .where(
-            PursuitActionRecord.status != "completed",
+            PursuitActionRecord.status == "open",
             PursuitActionRecord.due_at.is_not(None),
             PursuitActionRecord.due_at < now,
         )
