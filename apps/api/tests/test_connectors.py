@@ -85,6 +85,31 @@ def test_rss_connector_parses_rss_items():
     assert documents[0].published_at is not None
 
 
+def test_atom_connector_parses_feed_metadata_and_href_link():
+    raw = b"""<?xml version='1.0' encoding='UTF-8'?>
+    <feed xmlns='http://www.w3.org/2005/Atom'>
+      <title>Development Bank Projects</title>
+      <entry>
+        <title>Regional Highway Program</title>
+        <link rel='alternate' href='https://example.com/projects/highway'/>
+        <updated>2026-08-24T11:30:00Z</updated>
+        <summary>Financing approved for a regional highway construction program.</summary>
+      </entry>
+    </feed>"""
+    resource = PublicResource(
+        url="https://example.com/atom.xml",
+        content_type="application/atom+xml",
+        body=raw,
+        encoding="utf-8",
+    )
+    documents = parse_feed_resource(resource)
+    assert len(documents) == 1
+    assert documents[0].publisher == "Development Bank Projects"
+    assert documents[0].title == "Regional Highway Program"
+    assert documents[0].canonical_url == "https://example.com/projects/highway"
+    assert documents[0].published_at is not None
+
+
 def test_pdf_connector_rejects_image_only_or_empty_pdf():
     writer = PdfWriter()
     writer.add_blank_page(width=595, height=842)
