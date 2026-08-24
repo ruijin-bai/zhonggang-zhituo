@@ -51,6 +51,11 @@ def upgrade() -> None:
             "source_document_id",
             name="uq_opportunity_source_org_opportunity_document",
         ),
+        sa.UniqueConstraint(
+            "organization_id",
+            "source_document_id",
+            name="uq_opportunity_source_org_document",
+        ),
     )
     op.create_index(
         "ix_opportunity_source_documents_organization_id",
@@ -86,18 +91,22 @@ def upgrade() -> None:
                 )'''
         )
 
-    # 0012 introduced sources.source_document_id. Backfill any provenance already written during
-    # the short interval between the two migrations / rolling deployment steps.
+    # 0012 introduced sources.source_document_id. Backfill provenance already written during a
+    # rolling deployment. The unique organization/source_document constraint intentionally keeps
+    # one normalized document attached to one formal Opportunity until multi-project extraction
+    # is introduced as a separate, explicit model.
     bind.execute(
         sa.text(
             """
             INSERT INTO opportunity_source_documents (
                 organization_id, opportunity_id, source_document_id, source_id, linked_at
             )
-            SELECT organization_id, opportunity_id, source_document_id, id, created_at
+            SELECT DISTINCT ON (organization_id, source_document_id)
+                organization_id, opportunity_id, source_document_id, id, created_at
             FROM sources
             WHERE opportunity_id IS NOT NULL AND source_document_id IS NOT NULL
-            ON CONFLICT (organization_id, opportunity_id, source_document_id) DO NOTHING
+            ORDER BY organization_id, source_document_id, created_at ASC
+            ON CONFLICT (organization_id, source_document_id) DO NOTHING
             """
         )
     )
