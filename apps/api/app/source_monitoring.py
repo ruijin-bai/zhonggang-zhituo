@@ -429,8 +429,12 @@ async def scan_subscription(
             changed = archive.fetch_created
 
         finished_at = utc_now()
-        record.etag = outcome.etag or record.etag
-        record.last_modified = outcome.last_modified or record.last_modified
+        if outcome.not_modified:
+            record.etag = outcome.etag or record.etag
+            record.last_modified = outcome.last_modified or record.last_modified
+        else:
+            record.etag = outcome.etag
+            record.last_modified = outcome.last_modified
         record.consecutive_failures = 0
         record.total_scans += 1
         record.last_scan_at = finished_at
