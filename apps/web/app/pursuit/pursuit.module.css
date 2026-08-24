@@ -1,0 +1,438 @@
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.tabs a {
+  border: 1px solid #d5dbe4;
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: #425064;
+  text-decoration: none;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tabs a:hover {
+  border-color: #8fa2bb;
+  color: #183b66;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.metric {
+  border: 1px solid #dde2ea;
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px 16px;
+}
+
+.metric span {
+  display: block;
+  color: #6a7484;
+  font-size: 12px;
+}
+
+.metric strong {
+  display: block;
+  margin-top: 5px;
+  color: #172f4d;
+  font-size: 24px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.section {
+  border: 1px solid #dce1e8;
+  border-radius: 10px;
+  background: #fff;
+  padding: 18px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.sectionHead h2,
+.sectionHead h3 {
+  margin: 0;
+}
+
+.sectionHead h2 {
+  font-size: 18px;
+}
+
+.sectionHead h3 {
+  font-size: 15px;
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.card {
+  border: 1px solid #e1e5eb;
+  border-radius: 8px;
+  background: #fff;
+  padding: 13px 14px;
+}
+
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.cardTitle {
+  color: #183653;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.cardTitle:hover {
+  text-decoration: underline;
+}
+
+.meta {
+  color: #687385;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.note {
+  color: #4d5868;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.badge,
+.status,
+.priority {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d0d7e0;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.status {
+  background: #f8fafc;
+  color: #415066;
+}
+
+.priority {
+  color: #684c1e;
+  background: #fffaf0;
+  border-color: #e7d8b7;
+}
+
+.blocked {
+  color: #8c342d;
+  background: #fff5f3;
+  border-color: #e8c1bd;
+}
+
+.done {
+  color: #2f6547;
+  background: #f3faf6;
+  border-color: #c9e1d3;
+}
+
+.open {
+  color: #24527d;
+  background: #f3f8fc;
+  border-color: #c9d9e8;
+}
+
+.inProgress {
+  color: #664f17;
+  background: #fffaf0;
+  border-color: #e7d9a7;
+}
+
+.decisionGo {
+  color: #23623f;
+  background: #f0f8f3;
+  border-color: #bdd8c7;
+}
+
+.decisionHold {
+  color: #715719;
+  background: #fff9eb;
+  border-color: #e2d3a6;
+}
+
+.decisionNoGo {
+  color: #8a3630;
+  background: #fff4f3;
+  border-color: #e4bfbb;
+}
+
+.empty {
+  border: 1px dashed #cdd4de;
+  border-radius: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  color: #747e8d;
+}
+
+.workspaceHeader {
+  border: 1px solid #d8dee7;
+  border-radius: 10px;
+  background: #fff;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+.workspaceTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.workspaceTitle {
+  margin: 2px 0 6px;
+}
+
+.workspaceActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.linkButton,
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  min-height: 38px;
+  border-radius: 7px;
+  padding: 0 13px;
+  font-weight: 750;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.linkButton,
+.secondaryButton {
+  border: 1px solid #cfd6df;
+  color: #2f4764;
+  background: #fff;
+}
+
+.primaryButton {
+  border: 1px solid #173c68;
+  color: #fff;
+  background: #173c68;
+}
+
+.dangerButton {
+  border: 1px solid #b75b55;
+  color: #8b332d;
+  background: #fff;
+}
+
+.linkButton[aria-disabled="true"],
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.form {
+  display: grid;
+  gap: 10px;
+}
+
+.formGrid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  color: #5d6877;
+  font-size: 12px;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  border: 1px solid #cfd6df;
+  border-radius: 7px;
+  background: #fff;
+  color: #162235;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.field input,
+.field select {
+  min-height: 40px;
+}
+
+.formActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.error {
+  border: 1px solid #e3b6b2;
+  background: #fff5f4;
+  color: #8a342e;
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.success {
+  border: 1px solid #bed9c8;
+  background: #f4faf6;
+  color: #2c6143;
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th,
+.table td {
+  padding: 10px 9px;
+  border-bottom: 1px solid #e4e8ed;
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  color: #657083;
+  font-size: 11px;
+  font-weight: 750;
+  background: #fafbfc;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.workCounts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.workCounts div {
+  border-left: 2px solid #d8dee7;
+  padding-left: 7px;
+  color: #6a7483;
+  font-size: 11px;
+}
+
+.workCounts strong {
+  display: block;
+  margin-top: 2px;
+  color: #24364d;
+  font-size: 16px;
+}
+
+.timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.timelineItem {
+  border-left: 2px solid #d8dee7;
+  padding: 5px 0 5px 12px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.sticky {
+  position: sticky;
+  top: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+@media (max-width: 1050px) {
+  .metrics,
+  .grid3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .split {
+    grid-template-columns: 1fr;
+  }
+  .sticky {
+    position: static;
+  }
+}
+
+@media (max-width: 680px) {
+  .metrics,
+  .grid2,
+  .grid3,
+  .formGrid2,
+  .workCounts {
+    grid-template-columns: 1fr;
+  }
+  .workspaceTop {
+    flex-direction: column;
+  }
+}
