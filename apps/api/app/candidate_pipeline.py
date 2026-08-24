@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from hashlib import sha256
 from uuid import uuid4
 
@@ -28,6 +28,16 @@ class CandidateProcessResult(BaseModel):
     extraction_mode: str | None = None
     attempts: int
     error: str | None = None
+
+
+class CandidateSourceSnapshot(BaseModel):
+    id: str
+    title: str
+    canonical_url: str
+    publisher: str | None
+    published_at: datetime | None
+    content_sha256: str
+    text_object_key: str
 
 
 def ensure_candidate_processing(session: Session, source_document_id: str) -> CandidateProcessingRecord:
@@ -147,21 +157,37 @@ def _load_document_text(
     source_document_id: str,
     *,
     store: DocumentStore | None = None,
-) -> tuple[SourceDocumentRecord, str]:
+) -> tuple[CandidateSourceSnapshot, str]:
     document = session.get(SourceDocumentRecord, source_document_id)
     if document is None:
         raise ValueError("source document not found")
+    snapshot = CandidateSourceSnapshot(
+        id=document.id,
+        title=document.title,
+        canonical_url=document.canonical_url,
+        publisher=document.publisher,
+        published_at=document.published_at,
+        content_sha256=document.content_sha256,
+        text_object_key=document.text_object_key,
+    )
+
+    # SourceDocument metadata is immutable enough for one processing attempt. End the read
+    # transaction before S3/object-store and AI network I/O so workers do not pin a PostgreSQL
+    # transaction/connection for the whole external call. Session tenant context survives the
+    # rollback and db.py restores PostgreSQL set_config on the next transaction.
+    session.rollback()
+
     resolved_store = store or build_document_store()
-    raw = resolved_store.get(document.text_object_key)
+    raw = resolved_store.get(snapshot.text_object_key)
     actual = sha256(raw).hexdigest()
-    if actual != document.content_sha256:
+    if actual != snapshot.content_sha256:
         raise RuntimeError("normalized source document object failed SHA-256 verification")
     text_value = raw.decode("utf-8", errors="strict")
     if not text_value.strip():
         raise ValueError("normalized source document text is empty")
     # Project discovery has a deliberate bounded context. The immutable full text remains in
     # DocumentStore and can be reprocessed later with chunking/retrieval if needed.
-    return document, text_value[:100_000]
+    return snapshot, text_value[:100_000]
 
 
 def _finalization_lock(session: Session) -> None:
@@ -183,11 +209,15 @@ def _finalization_lock(session: Session) -> None:
     )
 
 
-def _result(row: CandidateProcessingRecord) -> CandidateProcessResult:
+def _result(
+    row: CandidateProcessingRecord,
+    *,
+    status: str | None = None,
+) -> CandidateProcessResult:
     return CandidateProcessResult(
         processing_id=row.id,
         source_document_id=row.source_document_id,
-        status=row.status,
+        status=status or row.status,
         draft_id=row.draft_id,
         duplicate_draft_id=row.duplicate_draft_id,
         project_detected=row.project_detected,
@@ -210,14 +240,17 @@ async def process_candidate_document(
     if row is None:
         raise ValueError("candidate processing record not found")
     if row.lease_token != lease_token:
-        return _result(row)
+        session.rollback()
+        return _result(row, status="stale_claim")
     if row.status not in {"processing", "pending", "retry"}:
+        session.rollback()
         return _result(row)
 
+    source_document_id = row.source_document_id
     try:
         document, document_text = _load_document_text(
             session,
-            row.source_document_id,
+            source_document_id,
             store=store,
         )
         service = ai_service or AIService()
@@ -235,7 +268,7 @@ async def process_candidate_document(
             raise ValueError("candidate processing record disappeared")
         if row.lease_token != lease_token:
             session.rollback()
-            return _result(row)
+            return _result(row, status="stale_claim")
         _finalization_lock(session)
 
         now = utc_now()
@@ -298,7 +331,7 @@ async def process_candidate_document(
             raise
         if row.lease_token != lease_token:
             session.rollback()
-            return _result(row)
+            return _result(row, status="stale_claim")
         now = utc_now()
         row.attempts += 1
         row.lease_until = None
