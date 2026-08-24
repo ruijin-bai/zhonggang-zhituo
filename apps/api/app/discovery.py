@@ -18,6 +18,7 @@ from .db import (
     SourceRecord,
 )
 from .document_store import DocumentStore, build_document_store
+from .entity_management import enforce_reviewed_owner
 from .intelligence import (
     aggregate_candidate_entities_to_opportunity,
     candidate_source_links,
@@ -345,6 +346,16 @@ def confirm_draft(
         opportunity_id=opportunity_id,
         fallback_discovery=reviewed_discovery,
     )
+    reviewed_owner_link = enforce_reviewed_owner(
+        session,
+        opportunity_id=opportunity_id,
+        discovery=reviewed_discovery,
+        source_count=len(evidence_sources),
+    )
+    if reviewed_owner_link is not None and all(
+        item.id != reviewed_owner_link.id for item in entity_links if item.id is not None
+    ):
+        entity_links.append(reviewed_owner_link)
 
     session.add(
         ScoreSnapshotRecord(
