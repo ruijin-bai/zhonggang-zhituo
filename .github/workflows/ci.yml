@@ -99,7 +99,11 @@ jobs:
       - name: Compile Python sources
         run: uv run python -m compileall -q app
       - name: Validate operations shell scripts
-        run: bash -n ../../ops/postgres/backup.sh ../../ops/postgres/restore.sh
+        run: >-
+          bash -n
+          ../../ops/postgres/backup.sh
+          ../../ops/postgres/restore.sh
+          ../../scripts/configure-github-ruleset.sh
       - name: Apply database migrations on clean PostgreSQL
         run: uv run alembic upgrade head
       - name: Verify latest migration downgrade and re-upgrade

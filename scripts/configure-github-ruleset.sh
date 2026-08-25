@@ -1,146 +1,190 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
 
-RULESET_NAME="${RULESET_NAME:-main-production-protection}"
-REQUIRED_CHECK="${REQUIRED_CHECK:-zhituo/ci-gate}"
-API_VERSION="${GITHUB_API_VERSION:-2022-11-28}"
+RULESET_NAME="main-protection"
+REPOSITORY=""
+DRY_RUN=false
+
+usage() {
+  cat <<'EOF'
+Configure the GitHub ruleset for the main branch.
+
+Usage:
+  ./scripts/configure-github-ruleset.sh [--repo OWNER/REPO] [--dry-run]
+
+Options:
+  --repo OWNER/REPO  Configure an explicit repository instead of the current one.
+  --dry-run          Print the desired ruleset without changing GitHub.
+  -h, --help         Show this help.
+EOF
+}
 
 fail() {
-  printf 'ERROR: %s\n' "$*" >&2
+  printf 'error: %s\n' "$*" >&2
   exit 1
 }
 
-info() {
-  printf '==> %s\n' "$*"
-}
+while (($# > 0)); do
+  case "$1" in
+    --repo)
+      (($# >= 2)) || fail "--repo requires OWNER/REPO"
+      REPOSITORY="$2"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1"
+      ;;
+  esac
+done
 
-command -v gh >/dev/null 2>&1 || fail "GitHub CLI (gh) is required: https://cli.github.com/"
-command -v jq >/dev/null 2>&1 || fail "jq is required"
+command -v gh >/dev/null 2>&1 || fail "GitHub CLI (gh) is not installed"
+gh auth status --hostname github.com >/dev/null 2>&1 || \
+  fail "GitHub CLI is not authenticated; run: gh auth login"
 
-gh auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated. Run: gh auth login"
-
-REPO="${1:-${GH_REPO:-}}"
-if [[ -z "$REPO" ]]; then
-  REPO="$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || true)"
+if [[ -z "$REPOSITORY" ]]; then
+  REPOSITORY="$(gh repo view --json nameWithOwner --jq '.nameWithOwner')"
 fi
-[[ "$REPO" =~ ^[^/]+/[^/]+$ ]] || fail "Cannot determine repository. Run inside the repo or pass OWNER/REPO as the first argument."
 
-info "Repository: $REPO"
-info "Ruleset: $RULESET_NAME"
-info "Required status: $REQUIRED_CHECK"
+[[ "$REPOSITORY" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]] || \
+  fail "invalid repository: $REPOSITORY (expected OWNER/REPO)"
 
-ADMIN="$(gh api -H "X-GitHub-Api-Version: $API_VERSION" "repos/$REPO" --jq '.permissions.admin // false')"
-[[ "$ADMIN" == "true" ]] || fail "The authenticated account needs repository Administration permission."
+DEFAULT_BRANCH="$(gh api "repos/$REPOSITORY" --jq '.default_branch')"
+[[ "$DEFAULT_BRANCH" == "main" ]] || \
+  fail "default branch is '$DEFAULT_BRANCH', not 'main'; no changes were made"
 
-DEFAULT_BRANCH="$(gh api -H "X-GitHub-Api-Version: $API_VERSION" "repos/$REPO" --jq '.default_branch')"
-[[ -n "$DEFAULT_BRANCH" ]] || fail "Unable to resolve the default branch."
-info "Default branch: $DEFAULT_BRANCH"
-
-# Prevent a typo in the required status context from deadlocking the default branch.
-STATUS_PRESENT="$(
-  gh api -H "X-GitHub-Api-Version: $API_VERSION" "repos/$REPO/commits/$DEFAULT_BRANCH/status" 2>/dev/null \
-    | jq --arg context "$REQUIRED_CHECK" '[.statuses[]? | select(.context == $context)] | length' \
-    || printf '0'
+MERGE_METHOD_AVAILABLE="$(
+  gh api "repos/$REPOSITORY" \
+    --jq '(.allow_squash_merge == true) or (.allow_rebase_merge == true)'
 )"
-[[ "$STATUS_PRESENT" =~ ^[0-9]+$ ]] || fail "Unable to inspect recent commit statuses."
-[[ "$STATUS_PRESENT" -gt 0 ]] || fail "Required status '$REQUIRED_CHECK' was not found on the current $DEFAULT_BRANCH commit. Run CI successfully first or override REQUIRED_CHECK explicitly."
+[[ "$MERGE_METHOD_AVAILABLE" == "true" ]] || \
+  fail "linear history requires squash or rebase merging to be enabled"
 
-PAYLOAD="$(mktemp)"
-trap 'rm -f "$PAYLOAD"' EXIT
+PAYLOAD_FILE="$(mktemp)"
+trap 'rm -f -- "$PAYLOAD_FILE"' EXIT
 
-jq -n \
-  --arg name "$RULESET_NAME" \
-  --arg check "$REQUIRED_CHECK" \
-  '{
-    name: $name,
-    target: "branch",
-    enforcement: "active",
-    bypass_actors: [],
-    conditions: {
-      ref_name: {
-        include: ["~DEFAULT_BRANCH"],
-        exclude: []
+cat >"$PAYLOAD_FILE" <<EOF
+{
+  "name": "$RULESET_NAME",
+  "target": "branch",
+  "enforcement": "active",
+  "bypass_actors": [],
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/main"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {"type": "deletion"},
+    {"type": "non_fast_forward"},
+    {"type": "required_linear_history"},
+    {
+      "type": "pull_request",
+      "parameters": {
+        "allowed_merge_methods": ["squash", "rebase"],
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_approving_review_count": 0,
+        "required_review_thread_resolution": false
       }
     },
-    rules: [
-      {type: "deletion"},
-      {type: "non_fast_forward"},
-      {type: "required_linear_history"},
-      {
-        type: "pull_request",
-        parameters: {
-          allowed_merge_methods: ["squash"],
-          dismiss_stale_reviews_on_push: false,
-          require_code_owner_review: false,
-          require_last_push_approval: false,
-          required_approving_review_count: 0,
-          required_review_thread_resolution: true
-        }
-      },
-      {
-        type: "required_status_checks",
-        parameters: {
-          do_not_enforce_on_create: false,
-          required_status_checks: [
-            {context: $check}
-          ],
-          strict_required_status_checks_policy: true
-        }
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          {"context": "zhituo/ci-gate"}
+        ],
+        "strict_required_status_checks_policy": true
       }
-    ]
-  }' > "$PAYLOAD"
+    }
+  ]
+}
+EOF
 
-EXISTING_ID="$(
-  gh api -H "X-GitHub-Api-Version: $API_VERSION" "repos/$REPO/rulesets?includes_parents=false" --paginate \
-    | jq --arg name "$RULESET_NAME" -r '.[] | select(.name == $name and .source_type == "Repository") | .id' \
-    | head -n 1
-)"
+printf 'Repository: %s\nRuleset:   %s\n' "$REPOSITORY" "$RULESET_NAME"
 
-if [[ -n "$EXISTING_ID" ]]; then
-  info "Updating existing ruleset ID $EXISTING_ID"
-  gh api \
-    --method PUT \
-    -H "Accept: application/vnd.github+json" \
-    -H "X-GitHub-Api-Version: $API_VERSION" \
-    "repos/$REPO/rulesets/$EXISTING_ID" \
-    --input "$PAYLOAD" >/dev/null
-  RULESET_ID="$EXISTING_ID"
-else
-  info "Creating repository ruleset"
-  RULESET_ID="$(
-    gh api \
-      --method POST \
-      -H "Accept: application/vnd.github+json" \
-      -H "X-GitHub-Api-Version: $API_VERSION" \
-      "repos/$REPO/rulesets" \
-      --input "$PAYLOAD" \
-      --jq '.id'
-  )"
+if [[ "$DRY_RUN" == "true" ]]; then
+  printf '\nDry run; GitHub was not changed. Desired payload:\n'
+  if command -v python >/dev/null 2>&1; then
+    python -m json.tool "$PAYLOAD_FILE"
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -m json.tool "$PAYLOAD_FILE"
+  else
+    command cat "$PAYLOAD_FILE"
+  fi
+  exit 0
 fi
 
-info "Verifying active ruleset"
-gh api \
-  -H "X-GitHub-Api-Version: $API_VERSION" \
-  "repos/$REPO/rulesets/$RULESET_ID" \
-  --jq '{id, name, enforcement, target, conditions, rules: [.rules[].type], bypass_actors}'
+mapfile -t MATCHING_RULESET_IDS < <(
+  gh api --paginate \
+    "repos/$REPOSITORY/rulesets?includes_parents=false&targets=branch&per_page=100" \
+    --jq ".[] | select(.name == \"$RULESET_NAME\") | .id"
+)
 
-cat <<EOF
+if ((${#MATCHING_RULESET_IDS[@]} > 1)); then
+  fail "found multiple repository rulesets named '$RULESET_NAME'; resolve duplicates first"
+fi
 
-Configured successfully.
+if ((${#MATCHING_RULESET_IDS[@]} == 1)); then
+  RULESET_ID="${MATCHING_RULESET_IDS[0]}"
+  gh api --method PUT "repos/$REPOSITORY/rulesets/$RULESET_ID" \
+    --input "$PAYLOAD_FILE" --silent
+  ACTION="updated"
+else
+  RULESET_ID="$(
+    gh api --method POST "repos/$REPOSITORY/rulesets" \
+      --input "$PAYLOAD_FILE" --jq '.id'
+  )"
+  ACTION="created"
+fi
 
-Default branch: $DEFAULT_BRANCH
-Ruleset:        $RULESET_NAME (ID $RULESET_ID)
-Required check: $REQUIRED_CHECK
+VERIFICATION="$(
+  gh api "repos/$REPOSITORY/rulesets/$RULESET_ID" --jq '
+    [
+      .name,
+      .target,
+      .enforcement,
+      (.bypass_actors | length | tostring),
+      (.conditions.ref_name.include | join(",")),
+      ([.rules[].type] | sort | join(",")),
+      (.rules[] | select(.type == "pull_request") | .parameters.required_approving_review_count | tostring),
+      (.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks | map(.context) | join(",")),
+      (.rules[] | select(.type == "required_status_checks") | .parameters.strict_required_status_checks_policy | tostring)
+    ] | @tsv'
+)"
 
-Enforced:
-  - changes must arrive through a pull request
-  - zero approving reviews required (single-developer workflow)
-  - review conversations must be resolved
-  - only squash merge is allowed by this ruleset
-  - '$REQUIRED_CHECK' must pass
-  - the PR must be tested against the latest default branch
-  - linear history is required
-  - branch deletion is blocked
-  - force pushes are blocked
-  - no bypass actors are configured
-EOF
+IFS=$'\t' read -r \
+  ACTUAL_NAME ACTUAL_TARGET ACTUAL_ENFORCEMENT ACTUAL_BYPASS_COUNT \
+  ACTUAL_INCLUDE ACTUAL_RULE_TYPES ACTUAL_APPROVALS ACTUAL_CHECKS ACTUAL_STRICT \
+  <<<"$VERIFICATION"
+
+EXPECTED_RULE_TYPES="deletion,non_fast_forward,pull_request,required_linear_history,required_status_checks"
+
+[[ "$ACTUAL_NAME" == "$RULESET_NAME" ]] || fail "verification failed: ruleset name"
+[[ "$ACTUAL_TARGET" == "branch" ]] || fail "verification failed: target"
+[[ "$ACTUAL_ENFORCEMENT" == "active" ]] || fail "verification failed: enforcement"
+[[ "$ACTUAL_BYPASS_COUNT" == "0" ]] || fail "verification failed: bypass actors"
+[[ "$ACTUAL_INCLUDE" == "refs/heads/main" ]] || fail "verification failed: target branch"
+[[ "$ACTUAL_RULE_TYPES" == "$EXPECTED_RULE_TYPES" ]] || fail "verification failed: rule types"
+[[ "$ACTUAL_APPROVALS" == "0" ]] || fail "verification failed: approvals"
+[[ "$ACTUAL_CHECKS" == "zhituo/ci-gate" ]] || fail "verification failed: required status"
+[[ "$ACTUAL_STRICT" == "true" ]] || fail "verification failed: latest-main policy"
+
+printf 'Ruleset %s and verified (id=%s).\n' "$ACTION" "$RULESET_ID"
+printf 'URL: https://github.com/%s/settings/rules/%s\n' "$REPOSITORY" "$RULESET_ID"
+
+if gh api "repos/$REPOSITORY/branches/main/protection" --silent >/dev/null 2>&1; then
+  printf '%s\n' \
+    "warning: classic branch protection also exists and may add stricter requirements." >&2
+fi
