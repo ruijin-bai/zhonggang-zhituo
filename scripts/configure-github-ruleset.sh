@@ -38,9 +38,11 @@ info "Default branch: $DEFAULT_BRANCH"
 
 # Prevent a typo in the required status context from deadlocking the default branch.
 STATUS_PRESENT="$(
-  gh api -H "X-GitHub-Api-Version: $API_VERSION" "repos/$REPO/commits/$DEFAULT_BRANCH/status" \
-    --jq --arg context "$REQUIRED_CHECK" '[.statuses[]? | select(.context == $context)] | length' 2>/dev/null || printf '0'
+  gh api -H "X-GitHub-Api-Version: $API_VERSION" "repos/$REPO/commits/$DEFAULT_BRANCH/status" 2>/dev/null \
+    | jq --arg context "$REQUIRED_CHECK" '[.statuses[]? | select(.context == $context)] | length' \
+    || printf '0'
 )"
+[[ "$STATUS_PRESENT" =~ ^[0-9]+$ ]] || fail "Unable to inspect recent commit statuses."
 [[ "$STATUS_PRESENT" -gt 0 ]] || fail "Required status '$REQUIRED_CHECK' was not found on the current $DEFAULT_BRANCH commit. Run CI successfully first or override REQUIRED_CHECK explicitly."
 
 PAYLOAD="$(mktemp)"
@@ -89,9 +91,8 @@ jq -n \
   }' > "$PAYLOAD"
 
 EXISTING_ID="$(
-  gh api -H "X-GitHub-Api-Version: $API_VERSION" "repos/$REPO/rulesets?includes_parents=false" \
-    --paginate \
-    --jq --arg name "$RULESET_NAME" '.[] | select(.name == $name and .source_type == "Repository") | .id' \
+  gh api -H "X-GitHub-Api-Version: $API_VERSION" "repos/$REPO/rulesets?includes_parents=false" --paginate \
+    | jq --arg name "$RULESET_NAME" -r '.[] | select(.name == $name and .source_type == "Repository") | .id' \
     | head -n 1
 )"
 
