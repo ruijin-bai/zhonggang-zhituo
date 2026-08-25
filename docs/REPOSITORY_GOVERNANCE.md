@@ -14,8 +14,8 @@ GitHub `main` 应启用 Repository Ruleset，并至少设置：
 4. 合并前要求分支与 `main` 保持最新，避免基于过期基线合并；
 5. 不配置常态 bypass；
 6. 禁止删除 `main` 和 force push；
-7. 只允许 squash merge，并要求 linear history；
-8. 单人开发阶段 required approvals 为 0，但 PR review conversation 必须解决。
+7. 只允许 squash / rebase merge，并要求 linear history；
+8. 单人开发阶段 required approvals 为 0。
 
 仓库提供幂等配置脚本，第一次执行会创建同名 Ruleset，后续执行会更新它：
 
@@ -27,17 +27,16 @@ bash scripts/configure-github-ruleset.sh
 也可以显式指定仓库：
 
 ```bash
-bash scripts/configure-github-ruleset.sh ruijin-bai/zhonggang-zhituo
+bash scripts/configure-github-ruleset.sh --repo ruijin-bai/zhonggang-zhituo
 ```
 
-脚本会先检查：GitHub CLI 登录状态、仓库 Administration 权限、默认分支，以及 `zhituo/ci-gate` 是否真实出现在当前默认分支提交状态中。只有预检通过才会创建或更新 `main-production-protection`，避免因状态名拼错把主分支锁死。
+脚本会先检查 GitHub CLI 登录状态、目标仓库、默认分支和可用的线性合并方式；
+随后创建或更新 `main-protection`，并从 GitHub 回读规则逐项验收。
 
-可通过环境变量覆盖默认值：
+执行前可先预演，不写入 GitHub：
 
 ```bash
-RULESET_NAME=main-production-protection \
-REQUIRED_CHECK=zhituo/ci-gate \
-bash scripts/configure-github-ruleset.sh
+bash scripts/configure-github-ruleset.sh --dry-run
 ```
 
 ## 3. PR 规模与审查规则

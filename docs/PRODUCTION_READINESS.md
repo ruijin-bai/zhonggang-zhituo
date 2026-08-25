@@ -202,6 +202,22 @@ Web lockfile 正在通过 CI 固化，完成后 Web CI、Security 与 Docker bui
 
 后续开发由 `zhituo/ci-gate` 作为主线最终结果，不再依赖人工截图 Actions 日志。
 
+### GitHub `main` Ruleset
+
+仓库用版本化脚本创建或更新 `main-protection` Ruleset：
+
+```bash
+gh auth login
+./scripts/configure-github-ruleset.sh
+```
+
+脚本要求 `main` 必须走 PR、`Required approvals = 0`、严格通过
+`zhituo/ci-gate`、分支基于最新 `main`，并禁止删除、force push 和非线性历史；
+不设置 bypass actor。可先用 `--dry-run` 查看目标配置，不写入 GitHub。
+
+脚本只管理同名 Ruleset，不删除其他 Ruleset 或经典 Branch Protection。GitHub 会叠加执行
+所有适用规则；如仓库另有保护规则，实际合并条件可能更严格。
+
 ## 4. 生产环境关键配置
 
 ```bash
