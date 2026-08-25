@@ -6,17 +6,39 @@
 
 ## 2. `main` 分支保护
 
-GitHub `main` 应启用 Branch Protection / Ruleset，并至少设置：
+GitHub `main` 应启用 Repository Ruleset，并至少设置：
 
 1. 禁止直接 push 到 `main`；
 2. 所有变更通过 Pull Request；
 3. 合并前必须通过 required status check：`zhituo/ci-gate`；
 4. 合并前要求分支与 `main` 保持最新，避免基于过期基线合并；
-5. 不允许管理员常态绕过规则；紧急绕过必须有事故记录；
-6. feature branch 合并后删除；
-7. 优先 squash merge，保持主线一项能力一个可回退提交。
+5. 不配置常态 bypass；
+6. 禁止删除 `main` 和 force push；
+7. 只允许 squash merge，并要求 linear history；
+8. 单人开发阶段 required approvals 为 0，但 PR review conversation 必须解决。
 
-当前仓库在启用该规则前，`zhituo/ci-gate` 只能作为约定，不能成为真正不可绕过的门禁。
+仓库提供幂等配置脚本，第一次执行会创建同名 Ruleset，后续执行会更新它：
+
+```bash
+gh auth login
+bash scripts/configure-github-ruleset.sh
+```
+
+也可以显式指定仓库：
+
+```bash
+bash scripts/configure-github-ruleset.sh ruijin-bai/zhonggang-zhituo
+```
+
+脚本会先检查：GitHub CLI 登录状态、仓库 Administration 权限、默认分支，以及 `zhituo/ci-gate` 是否真实出现在当前默认分支提交状态中。只有预检通过才会创建或更新 `main-production-protection`，避免因状态名拼错把主分支锁死。
+
+可通过环境变量覆盖默认值：
+
+```bash
+RULESET_NAME=main-production-protection \
+REQUIRED_CHECK=zhituo/ci-gate \
+bash scripts/configure-github-ruleset.sh
+```
 
 ## 3. PR 规模与审查规则
 
@@ -34,8 +56,9 @@ PR 描述必须说明：目标、事实边界、权限/租户影响、失败路�
 `zhituo/ci-gate` 是主线唯一 required status check，对下列工作汇总负责：
 
 - Web 类型检查与 production build；
-- Python Ruff lint；
+- Python Ruff correctness/import lint；
 - API unit / integration / PostgreSQL RLS tests；
+- API coverage，当前首版 fail-under 为 69%；
 - clean migration 与 latest downgrade/re-upgrade；
 - runtime / backup 数据库最小权限；
 - PostgreSQL backup / restore drill；
@@ -44,8 +67,8 @@ PR 描述必须说明：目标、事实边界、权限/租户影响、失败路�
 
 后续按独立 PR 增加：
 
-- coverage 基线与逐步提高的 fail-under；
 - Playwright 黄金 E2E；
+- coverage 逐步抬升；
 - container CVE scan；
 - secret scanning / SAST；
 - release / staging smoke gate。
