@@ -69,6 +69,7 @@ jobs:
           --rows 5
           --require-new-draft
           --require-market-country
+          --reject-unknown-sector-drafts
       - name: Upload persisted pilot record
         if: always()
         uses: actions/upload-artifact@v4
