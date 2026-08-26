@@ -34,3 +34,4 @@ data/benchmark/ci_evaluation.json
 
 # Real-source pilot runtime artifacts
 data/pilot/latest_run.json
+data/pilot/latest_persisted_run.json

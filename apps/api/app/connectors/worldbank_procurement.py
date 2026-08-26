@@ -103,6 +103,7 @@ def _notice_text(record: dict) -> tuple[str, str, str, datetime | None, dict]:
         ("Bid Reference", _first(record, "bid_reference", "bid_ref", "reference_no")),
         ("Description", title),
         ("Procurement Category", _first(record, "procurement_category", "category")),
+        ("Procurement Group", _first(record, "procurement_group")),
         ("Procurement Method", _first(record, "procurement_method", "procurement_method_name")),
         ("Contact Organization", _first(record, "contact_organization", "organization_name", "borrower")),
         ("Contact Name", _first(record, "contact_name")),
@@ -120,6 +121,9 @@ def _notice_text(record: dict) -> tuple[str, str, str, datetime | None, dict]:
         "country": _first(record, "project_ctry_name", "country_name", "country"),
         "project_id": _first(record, "project_id", "projectid"),
         "project_name": _first(record, "project_name", "project_title"),
+        "procurement_group": _first(record, "procurement_group"),
+        "procurement_method_code": _first(record, "procurement_method_code"),
+        "procurement_method_name": _first(record, "procurement_method_name", "procurement_method"),
         "submission_deadline_date": _first(
             record,
             "submission_deadline_date",

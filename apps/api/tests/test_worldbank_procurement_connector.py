@@ -28,6 +28,9 @@ def _payload() -> bytes:
                     "project_name": "Nigeria Distribution Sector Recovery Program",
                     "bid_reference": "NG-NERC-001-RFB",
                     "bid_description": "Supply and Installation of Smart Meters",
+                    "procurement_group": "GO",
+                    "procurement_method_code": "RFB",
+                    "procurement_method_name": "Request for Bids",
                     "procurement_method": "Request for Bids",
                     "contact_organization": "Nigeria Electricity Regulatory Commission",
                     "contact_address": "12 Airport Road, Abuja",
@@ -73,10 +76,14 @@ def test_worldbank_procurement_connector_normalizes_notices(monkeypatch):
     assert first.metadata["notice_id"] == "OP00470001"
     assert first.metadata["country"] == "Nigeria"
     assert first.metadata["project_id"] == "P172891"
+    assert first.metadata["procurement_group"] == "GO"
+    assert first.metadata["procurement_method_code"] == "RFB"
+    assert first.metadata["procurement_method_name"] == "Request for Bids"
     assert first.metadata["contact_address"] == "12 Airport Road, Abuja"
     assert "Notice Type: Invitation for Bids" in first.text
     assert "Project: Nigeria Distribution Sector Recovery Program" in first.text
     assert "Description: Supply and Installation of Smart Meters" in first.text
+    assert "Procurement Group: GO" in first.text
     assert "Airport Road" not in first.text
     assert first.canonical_url.endswith("format=json&id=OP00470001")
     assert result.source_raw_sha256 in result.raw_objects
