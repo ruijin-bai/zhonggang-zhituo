@@ -14,15 +14,15 @@ test("admin can create an assigned Pursuit Work Item through the real BFF", asyn
 
   const createForm = page
     .locator("form")
-    .filter({ has: page.getByRole("button", { name: "创建 Work Item" }) });
+    .filter({ has: page.getByRole("button", { name: "创建 Work Item", exact: true }) });
 
-  await createForm.getByLabel("工作项").fill(workItemTitle);
-  await createForm.getByLabel("负责人").selectOption({ label: "智拓管理员 · admin" });
-  await createForm.getByLabel("优先级").selectOption("high");
-  await createForm.getByRole("button", { name: "创建 Work Item" }).click();
+  await createForm.getByRole("textbox", { name: "工作项", exact: true }).fill(workItemTitle);
+  await createForm.getByLabel("负责人", { exact: true }).selectOption({ label: "智拓管理员 · admin" });
+  await createForm.getByLabel("优先级", { exact: true }).selectOption("high");
+  await createForm.getByRole("button", { name: "创建 Work Item", exact: true }).click();
 
   await page.goto("/pursuit");
   await expect(page.getByRole("heading", { level: 1, name: "我的经营工作" })).toBeVisible();
-  await expect(page.getByText("智拓管理员 · admin")).toBeVisible();
-  await expect(page.getByRole("link", { name: workItemTitle })).toBeVisible();
+  await expect(page.getByText("智拓管理员 · admin", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: workItemTitle, exact: true })).toBeVisible();
 });
