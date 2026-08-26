@@ -3,9 +3,7 @@ import argparse
 import asyncio
 import hashlib
 import json
-import re
 import sys
-import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -15,29 +13,16 @@ sys.path.insert(0, str(ROOT / "apps" / "api"))
 
 from app.connectors.pdf import PdfConnector  # noqa: E402
 from app.gold_dataset import load_gold_dataset, validate_gold_dataset  # noqa: E402
+from app.source_snapshot import (  # noqa: E402
+    build_source_snapshot,
+    evidence_coverage,
+    verify_source_snapshot,
+)
 from app.web_fetch import MAX_PAGE_BYTES, extract_page_text, fetch_public_resource  # noqa: E402
 
 
 def looks_like_pdf(url: str) -> bool:
     return urlparse(url).path.lower().endswith(".pdf")
-
-
-def normalize_evidence(value: str) -> str:
-    normalized = unicodedata.normalize("NFKC", value).casefold()
-    return " ".join(part for part in re.split(r"\W+", normalized) if part)
-
-
-def evidence_coverage(text: str, evidence: list[str]) -> tuple[list[str], list[str]]:
-    normalized_text = normalize_evidence(text)
-    hits: list[str] = []
-    missing: list[str] = []
-    for item in evidence:
-        normalized_item = normalize_evidence(str(item))
-        if normalized_item and normalized_item in normalized_text:
-            hits.append(str(item))
-        else:
-            missing.append(str(item))
-    return hits, missing
 
 
 async def fetch_sample(sample: dict) -> dict:
@@ -54,7 +39,6 @@ async def fetch_sample(sample: dict) -> dict:
         title = document.title
         text = document.text
         content_type = document.content_type
-        content_sha256 = document.content_sha256
         raw_sha256 = document.raw_sha256
         raw_size_bytes = document.raw_size_bytes
         source_type = "pdf"
@@ -68,7 +52,6 @@ async def fetch_sample(sample: dict) -> dict:
         title, text = extract_page_text(resource)
         resolved_url = resource.url
         content_type = resource.content_type
-        content_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
         raw_sha256 = hashlib.sha256(resource.body).hexdigest()
         raw_size_bytes = len(resource.body)
         source_type = "html"
@@ -76,21 +59,40 @@ async def fetch_sample(sample: dict) -> dict:
     hits, missing = evidence_coverage(text, list(sample.get("gold_evidence") or []))
     return {
         "sample_id": sample_id,
-        "status": "cached" if not missing else "evidence-mismatch",
+        "status": "verified-fetched" if not missing else "evidence-mismatch",
         "source_url": url,
         "resolved_url": resolved_url,
         "source_title": title,
         "source_type": source_type,
         "content_type": content_type,
         "fetched_at": fetched_at,
-        "content_sha256": content_sha256,
         "raw_sha256": raw_sha256,
         "raw_size_bytes": raw_size_bytes,
-        "char_count": len(text),
+        "char_count": len(text.strip()),
         "evidence_total": len(hits) + len(missing),
         "evidence_hits": hits,
         "missing_evidence": missing,
         "text": text,
+    }
+
+
+def existing_snapshot_result(sample: dict, target: Path) -> dict:
+    snapshot = verify_source_snapshot(sample, target.read_text(encoding="utf-8"))
+    return {
+        "sample_id": sample["sample_id"],
+        "status": "verified-existing",
+        "source_url": sample["source_url"],
+        "resolved_url": snapshot.resolved_url,
+        "source_title": snapshot.source_title,
+        "fetched_at": snapshot.fetched_at,
+        "content_sha256": snapshot.content_sha256,
+        "raw_sha256": snapshot.raw_sha256,
+        "raw_size_bytes": snapshot.raw_size_bytes,
+        "char_count": len(snapshot.text),
+        "evidence_total": len(sample.get("gold_evidence") or []),
+        "evidence_hits": list(sample.get("gold_evidence") or []),
+        "missing_evidence": [],
+        "path": str(target.relative_to(ROOT)),
     }
 
 
@@ -112,34 +114,37 @@ async def main_async(
         sample_id = sample["sample_id"]
         target = cache_dir / f"{sample_id}.txt"
         if target.exists() and target.stat().st_size > 100 and not refresh:
-            manifest.append(
-                {
-                    "sample_id": sample_id,
-                    "status": "cached-existing",
-                    "source_url": sample["source_url"],
-                    "path": str(target.relative_to(ROOT)),
-                }
-            )
-            print(f"[cached-existing] {sample_id}")
-            continue
+            try:
+                result = existing_snapshot_result(sample, target)
+                manifest.append(result)
+                print(f"[verified-existing] {sample_id}")
+                continue
+            except Exception as exc:
+                print(f"[invalid-existing] {sample_id}: {exc}; attempting refresh")
 
         try:
             result = await fetch_sample(sample)
             text = result.pop("text")
-            header = (
-                f"SOURCE_URL: {result['resolved_url']}\n"
-                f"SOURCE_TITLE: {result['source_title']}\n"
-                f"FETCHED_AT: {result['fetched_at']}\n"
-                f"CONTENT_SHA256: {result['content_sha256']}\n"
-                f"RAW_SHA256: {result['raw_sha256']}\n\n"
+            if result["status"] == "evidence-mismatch":
+                manifest.append(result)
+                print(f"[evidence-mismatch] {sample_id}: {result['missing_evidence']}")
+                continue
+
+            snapshot_text = build_source_snapshot(
+                origin_source_url=sample["source_url"],
+                resolved_url=result["resolved_url"],
+                source_title=result["source_title"],
+                fetched_at=result["fetched_at"],
+                raw_sha256=result["raw_sha256"],
+                raw_size_bytes=result["raw_size_bytes"],
+                text=text,
             )
-            target.write_text(header + text, encoding="utf-8")
+            target.write_text(snapshot_text, encoding="utf-8")
+            verified = verify_source_snapshot(sample, snapshot_text)
+            result["content_sha256"] = verified.content_sha256
             result["path"] = str(target.relative_to(ROOT))
             manifest.append(result)
-            if result["status"] == "cached":
-                print(f"[ok] {sample_id} ({result['char_count']} chars)")
-            else:
-                print(f"[evidence-mismatch] {sample_id}: {result['missing_evidence']}")
+            print(f"[verified-fetched] {sample_id} ({result['char_count']} chars)")
         except Exception as exc:
             manifest.append(
                 {
@@ -154,19 +159,17 @@ async def main_async(
     manifest_path = cache_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    passed = sum(1 for item in manifest if item["status"] == "cached")
-    existing = sum(1 for item in manifest if item["status"] == "cached-existing")
+    verified = sum(
+        1 for item in manifest if item["status"] in {"verified-fetched", "verified-existing"}
+    )
     mismatches = sum(1 for item in manifest if item["status"] == "evidence-mismatch")
     errors = sum(1 for item in manifest if item["status"] == "error")
-    print(
-        "done: "
-        f"verified={passed}, cached-existing={existing}, evidence-mismatch={mismatches}, errors={errors}"
-    )
+    print(f"done: verified={verified}, evidence-mismatch={mismatches}, errors={errors}")
 
-    if require_all and (passed != len(samples) or existing or mismatches or errors):
+    if require_all and (verified != len(samples) or mismatches or errors):
         raise SystemExit(
-            f"Gold source provenance incomplete: verified={passed}/{len(samples)}, "
-            f"cached-existing={existing}, evidence-mismatch={mismatches}, errors={errors}"
+            f"Gold source provenance incomplete: verified={verified}/{len(samples)}, "
+            f"evidence-mismatch={mismatches}, errors={errors}"
         )
 
 
@@ -177,7 +180,7 @@ def main() -> None:
     parser.add_argument(
         "--require-all",
         action="store_true",
-        help="exit non-zero unless every requested source is fetched and all Gold evidence is found",
+        help="exit non-zero unless every requested source has a verified snapshot",
     )
     args = parser.parse_args()
     asyncio.run(main_async(args.limit, refresh=args.refresh, require_all=args.require_all))
