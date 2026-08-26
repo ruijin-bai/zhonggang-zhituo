@@ -1,0 +1,3 @@
+- Required gate owns only business-critical browser paths.
+- Failures upload Playwright trace/video/screenshot plus API/Web logs.
+- Seed data must be deterministic and idempotent.
