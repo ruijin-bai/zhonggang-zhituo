@@ -6,7 +6,7 @@ on:
     - cron: '37 5 * * 1'
   push:
     branches:
-      - feat/worldbank-real-pilot
+      - main
     paths:
       - 'apps/api/app/connectors/worldbank_procurement.py'
       - 'apps/api/app/connectors/registry.py'
