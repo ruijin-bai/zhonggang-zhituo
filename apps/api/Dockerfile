@@ -16,6 +16,7 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 
 RUN uv sync --locked --no-dev --no-editable \
+    && /app/.venv/bin/python -c "from importlib.resources import files; from app.seed import DATA_FILE; DATA_FILE.parent.mkdir(parents=True, exist_ok=True); DATA_FILE.write_bytes(files('app').joinpath('demo_data/opportunities.json').read_bytes()); assert DATA_FILE.is_file()" \
     && /app/.venv/bin/python -m compileall -q app
 
 USER zhituo
