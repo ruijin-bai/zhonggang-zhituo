@@ -7,7 +7,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps" / "api"))
 
-from app.benchmark import calculate_benchmark  # noqa: E402
+from app.benchmark import calculate_benchmark, validate_benchmark_rows  # noqa: E402
+
+
+def _parse_bool(value: str, *, row_number: int) -> bool:
+    normalized = value.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+    raise ValueError(f"row {row_number}: decision_match must be true or false")
 
 
 def main() -> None:
@@ -15,11 +24,14 @@ def main() -> None:
     with path.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     normalized = []
-    for row in rows:
-        normalized.append({
-            **row,
-            "decision_match": row["decision_match"].strip().lower() == "true",
-        })
+    for index, row in enumerate(rows, start=2):
+        normalized.append(
+            {
+                **row,
+                "decision_match": _parse_bool(row["decision_match"], row_number=index),
+            }
+        )
+    validate_benchmark_rows(normalized)
     metrics = calculate_benchmark(normalized)
     print("中港智拓业务价值 Benchmark")
     print(f"样本数: {metrics.samples}")

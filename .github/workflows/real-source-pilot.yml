@@ -1,0 +1,48 @@
+name: Real Source Pilot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 5 * * 1'
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/api/app/connectors/worldbank_procurement.py'
+      - 'apps/api/app/connectors/registry.py'
+      - 'data/pilot/**'
+      - 'scripts/run_real_source_pilot.py'
+      - '.github/workflows/real-source-pilot.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  worldbank-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'uv>=0.8,<1'
+      - name: Install locked API dependencies
+        working-directory: apps/api
+        run: uv sync --locked --extra dev
+      - name: Run five-market real source pilot
+        run: >-
+          uv run --project apps/api python scripts/run_real_source_pilot.py
+          --require-all-sources
+          --max-documents-per-source 5
+      - name: Upload real source run record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-source-pilot-${{ github.sha }}
+          path: data/pilot/latest_run.json
+          if-no-files-found: warn
+          retention-days: 30

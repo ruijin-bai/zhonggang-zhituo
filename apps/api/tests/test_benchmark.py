@@ -1,4 +1,6 @@
-from app.benchmark import calculate_benchmark
+import pytest
+
+from app.benchmark import calculate_benchmark, validate_benchmark_rows
 
 
 def test_calculate_benchmark_from_paired_samples():
@@ -20,3 +22,45 @@ def test_empty_benchmark_is_zero_not_fabricated():
     metrics = calculate_benchmark([])
     assert metrics.samples == 0
     assert metrics.efficiency_gain_pct == 0
+
+
+def _valid_row(**overrides):
+    row = {
+        "sample_id": "pilot-001",
+        "source_url": "https://example.com/source/1",
+        "reviewer": "Reviewer A",
+        "manual_seconds": "600",
+        "zhituo_seconds": "120",
+        "fields_correct": "8",
+        "fields_total": "10",
+        "evidence_traced": "9",
+        "evidence_total": "10",
+        "decision_match": True,
+    }
+    row.update(overrides)
+    return row
+
+
+def test_validate_benchmark_rows_accepts_auditable_pair():
+    validate_benchmark_rows([_valid_row()])
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"reviewer": ""}, "reviewer"),
+        ({"manual_seconds": "0"}, "elapsed seconds"),
+        ({"fields_correct": "11"}, "fields_correct"),
+        ({"evidence_traced": "11"}, "evidence_traced"),
+        ({"source_url": "http://example.com/source"}, "HTTPS"),
+        ({"decision_match": "true"}, "boolean"),
+    ],
+)
+def test_validate_benchmark_rows_rejects_malformed_rows(overrides, message):
+    with pytest.raises(ValueError, match=message):
+        validate_benchmark_rows([_valid_row(**overrides)])
+
+
+def test_validate_benchmark_rows_rejects_duplicate_sample_ids():
+    with pytest.raises(ValueError, match="duplicate sample_id"):
+        validate_benchmark_rows([_valid_row(), _valid_row()])

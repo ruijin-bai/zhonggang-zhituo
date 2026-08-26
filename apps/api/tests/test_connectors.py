@@ -126,7 +126,7 @@ def test_pdf_connector_rejects_image_only_or_empty_pdf():
 
 
 def test_connector_registry_is_explicit():
-    assert connector_kinds() == ("html", "pdf", "rss")
+    assert connector_kinds() == ("html", "pdf", "rss", "worldbank_procurement")
     assert get_connector("PDF").kind == "pdf"
     with pytest.raises(ValueError, match="未知 Source Connector"):
         get_connector("crawler")

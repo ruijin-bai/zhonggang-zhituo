@@ -1,0 +1,37 @@
+[
+  {
+    "source_id": "worldbank-nigeria-current-opportunities",
+    "name": "World Bank Nigeria current procurement opportunities",
+    "connector": "worldbank_procurement",
+    "market": "Nigeria",
+    "url": "https://search.worldbank.org/api/v2/procnotices?format=json&rows=25&os=0&project_ctry_name=Nigeria&srt=submission_deadline_date&order=desc&apilang=en&srce=both&notice_type_exact=Invitation%20for%20Bids%5EInvitation%20for%20Prequalification%5ERequest%20for%20Expression%20of%20Interest"
+  },
+  {
+    "source_id": "worldbank-ghana-current-opportunities",
+    "name": "World Bank Ghana current procurement opportunities",
+    "connector": "worldbank_procurement",
+    "market": "Ghana",
+    "url": "https://search.worldbank.org/api/v2/procnotices?format=json&rows=25&os=0&project_ctry_name=Ghana&srt=submission_deadline_date&order=desc&apilang=en&srce=both&notice_type_exact=Invitation%20for%20Bids%5EInvitation%20for%20Prequalification%5ERequest%20for%20Expression%20of%20Interest"
+  },
+  {
+    "source_id": "worldbank-senegal-current-opportunities",
+    "name": "World Bank Senegal current procurement opportunities",
+    "connector": "worldbank_procurement",
+    "market": "Senegal",
+    "url": "https://search.worldbank.org/api/v2/procnotices?format=json&rows=25&os=0&project_ctry_name=Senegal&srt=submission_deadline_date&order=desc&apilang=en&srce=both&notice_type_exact=Invitation%20for%20Bids%5EInvitation%20for%20Prequalification%5ERequest%20for%20Expression%20of%20Interest"
+  },
+  {
+    "source_id": "worldbank-mozambique-current-opportunities",
+    "name": "World Bank Mozambique current procurement opportunities",
+    "connector": "worldbank_procurement",
+    "market": "Mozambique",
+    "url": "https://search.worldbank.org/api/v2/procnotices?format=json&rows=25&os=0&project_ctry_name=Mozambique&srt=submission_deadline_date&order=desc&apilang=en&srce=both&notice_type_exact=Invitation%20for%20Bids%5EInvitation%20for%20Prequalification%5ERequest%20for%20Expression%20of%20Interest"
+  },
+  {
+    "source_id": "worldbank-zambia-current-opportunities",
+    "name": "World Bank Zambia current procurement opportunities",
+    "connector": "worldbank_procurement",
+    "market": "Zambia",
+    "url": "https://search.worldbank.org/api/v2/procnotices?format=json&rows=25&os=0&project_ctry_name=Zambia&srt=submission_deadline_date&order=desc&apilang=en&srce=both&notice_type_exact=Invitation%20for%20Bids%5EInvitation%20for%20Prequalification%5ERequest%20for%20Expression%20of%20Interest"
+  }
+]
