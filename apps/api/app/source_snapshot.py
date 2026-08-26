@@ -59,7 +59,8 @@ def build_source_snapshot(
     raw_size_bytes: int,
     text: str,
 ) -> str:
-    content_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    body = text.strip()
+    content_sha256 = hashlib.sha256(body.encode("utf-8")).hexdigest()
     header = (
         f"ORIGIN_SOURCE_URL: {origin_source_url}\n"
         f"RESOLVED_URL: {resolved_url}\n"
@@ -69,7 +70,7 @@ def build_source_snapshot(
         f"RAW_SHA256: {raw_sha256}\n"
         f"RAW_SIZE_BYTES: {raw_size_bytes}\n\n"
     )
-    return header + text
+    return header + body
 
 
 def parse_source_snapshot(raw: str) -> VerifiedSourceSnapshot:
