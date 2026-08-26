@@ -43,6 +43,7 @@ class CandidateSourceSnapshot(BaseModel):
     published_at: datetime | None
     content_sha256: str
     text_object_key: str
+    connector_metadata: dict
 
 
 def ensure_candidate_processing(session: Session, source_document_id: str) -> CandidateProcessingRecord:
@@ -174,6 +175,7 @@ def _load_document_text(
         published_at=document.published_at,
         content_sha256=document.content_sha256,
         text_object_key=document.text_object_key,
+        connector_metadata=document.connector_metadata,
     )
 
     # SourceDocument metadata is immutable enough for one processing attempt. End the read
@@ -264,6 +266,9 @@ async def process_candidate_document(
             page_title=document.title,
             use_ai=True,
         )
+        metadata_country = str(document.connector_metadata.get("country") or "").strip()
+        if discovery.country == "待识别" and metadata_country:
+            discovery = discovery.model_copy(update={"country": metadata_country})
 
         # Re-enter a short locked transaction after the expensive external/model call. A stale
         # worker that lost its lease is fenced out before it can create a candidate.
