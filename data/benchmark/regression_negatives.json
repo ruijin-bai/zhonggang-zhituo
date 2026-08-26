@@ -1,0 +1,34 @@
+[
+  {
+    "sample_id": "fixture-negative-institutional-meeting-01",
+    "sample_kind": "synthetic-regression",
+    "source_name": "Synthetic institutional meeting fixture",
+    "project_expected": false,
+    "fixture_text": "The institution announces its annual meetings, governance agenda, plenary sessions and member-country discussions. Registration information and meeting logistics are provided for delegates.",
+    "must_not_infer": ["engineering opportunity", "owner", "financier", "competitor", "contract value"]
+  },
+  {
+    "sample_id": "fixture-negative-financial-report-02",
+    "sample_kind": "synthetic-regression",
+    "source_name": "Synthetic financial reporting fixture",
+    "project_expected": false,
+    "fixture_text": "The annual financial report summarizes capital adequacy, treasury operations, administrative expenditure and audited institutional accounts. The document reports aggregate balance-sheet information only.",
+    "must_not_infer": ["engineering opportunity", "procurement stage", "contract value", "preferred bidder"]
+  },
+  {
+    "sample_id": "fixture-negative-governance-policy-03",
+    "sample_kind": "synthetic-regression",
+    "source_name": "Synthetic governance policy fixture",
+    "project_expected": false,
+    "fixture_text": "This governance policy describes ethics, disclosure, records retention, staff responsibilities and internal review procedures. It does not announce a works package or a tender.",
+    "must_not_infer": ["engineering opportunity", "employer", "competitor", "bid timeline"]
+  },
+  {
+    "sample_id": "fixture-negative-recruitment-04",
+    "sample_kind": "synthetic-regression",
+    "source_name": "Synthetic recruitment fixture",
+    "project_expected": false,
+    "fixture_text": "A recruitment notice seeks an internal audit specialist. The notice lists qualifications, employment duties, application instructions and the closing date for candidates.",
+    "must_not_infer": ["engineering opportunity", "construction package", "contractor", "win probability"]
+  }
+]

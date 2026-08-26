@@ -124,6 +124,17 @@ SECTOR_TAXONOMY = [
 ]
 
 
+def _contains_taxonomy_term(lowered: str, term: str) -> bool:
+    """Match ASCII taxonomy terms as tokens/phrases, not arbitrary substrings.
+
+    This prevents false positives such as matching ``port`` inside ``report`` while retaining
+    substring matching for Chinese terms where word boundaries are not represented by spaces.
+    """
+    if not term.isascii():
+        return term in lowered
+    return re.search(rf"(?<![a-z0-9]){re.escape(term.lower())}(?![a-z0-9])", lowered) is not None
+
+
 def _party_from_patterns(
     text: str,
     *,
@@ -155,7 +166,7 @@ def _deterministic_project(text: str, page_title: str) -> ProjectDiscovery:
         "terminal", "dredging", "water supply", "transmission line", "substation", "irrigation",
         "工程", "项目", "公路", "港口", "桥梁", "铁路", "机场", "疏浚", "供水", "输电", "灌溉",
     )
-    detected = any(term in lowered for term in project_terms)
+    detected = any(_contains_taxonomy_term(lowered, term) for term in project_terms)
 
     country, region = "待识别", "待识别"
     for keyword, values in COUNTRY_TAXONOMY.items():
@@ -165,7 +176,7 @@ def _deterministic_project(text: str, page_title: str) -> ProjectDiscovery:
 
     sector = "待识别"
     for terms, label in SECTOR_TAXONOMY:
-        if any(term in lowered for term in terms):
+        if any(_contains_taxonomy_term(lowered, term) for term in terms):
             sector = label
             break
 
