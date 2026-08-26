@@ -49,6 +49,9 @@ def main() -> None:
         f"跳过: {report.samples_skipped}"
     )
     print(f"运行模式分布: {report.extraction_modes}")
+    if args.mode == "source-text":
+        verified = sum(1 for status in report.source_provenance.values() if status == "verified-snapshot")
+        print(f"来源快照验证: {verified}/{report.samples_total}")
     print(f"项目识别准确率: {s['detection_accuracy_pct']}%")
     print(f"字段准确率: {s['field_accuracy_pct']}%")
     print(f"证据召回率: {s['evidence_recall_pct']}%")
@@ -59,7 +62,7 @@ def main() -> None:
         print("CI regression fixture completed; scores above are engineering regression signals, not business claims.")
     if args.mode == "source-text" and not report.publishable:
         print(
-            "提示: 先运行 python scripts/cache_gold_sources.py；PDF 样本需人工提取原文后放入 source_cache。"
+            "提示: source-text 正式评测要求 13/13 来源快照通过 URL、正文 SHA-256 和 Gold evidence 校验。"
         )
 
 
