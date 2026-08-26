@@ -1,0 +1,79 @@
+name: Persisted Real Source Pilot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 6 * * 1'
+  push:
+    branches:
+      - main
+      - test/persisted-real-source-pilot
+    paths:
+      - 'apps/api/app/candidate_pipeline.py'
+      - 'apps/api/app/connectors/worldbank_procurement.py'
+      - 'apps/api/app/source_archive.py'
+      - 'apps/api/app/source_monitoring.py'
+      - 'data/pilot/**'
+      - 'scripts/run_persisted_real_source_pilot.py'
+      - '.github/workflows/persisted-real-source-pilot.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  persisted-worldbank-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      APP_ENV: test
+      DATA_BACKEND: database
+      DATABASE_URL: postgresql+psycopg://zhituo:zhituo@127.0.0.1:5432/zhituo
+      DATABASE_RLS_ENABLED: 'true'
+      DEMO_MODE: 'false'
+      ALLOW_DEMO_FALLBACK: 'false'
+      DOCUMENT_STORE_BACKEND: local
+      DOCUMENT_STORE_LOCAL_PATH: /tmp/zhituo-persisted-pilot-objects
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: zhituo
+          POSTGRES_PASSWORD: zhituo
+          POSTGRES_DB: zhituo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U zhituo -d zhituo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'uv>=0.8,<1'
+      - name: Install locked API dependencies
+        working-directory: apps/api
+        run: uv sync --locked --extra dev
+      - name: Apply migrations to fresh PostgreSQL
+        working-directory: apps/api
+        run: uv run alembic upgrade head
+      - name: Run persisted Zambia real-source path
+        run: >-
+          uv run --project apps/api python scripts/run_persisted_real_source_pilot.py
+          --market Zambia
+          --rows 5
+          --require-new-draft
+          --require-market-country
+      - name: Upload persisted pilot record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: persisted-real-source-pilot-${{ github.sha }}
+          path: data/pilot/latest_persisted_run.json
+          if-no-files-found: warn
+          retention-days: 30
