@@ -1,0 +1,83 @@
+name: Persisted Quality Bootstrap
+
+on:
+  push:
+    branches:
+      - test/persisted-real-source-pilot
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/persisted-real-source-pilot
+      - name: Apply exact quality patches
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          connector = Path('apps/api/app/connectors/worldbank_procurement.py')
+          text = connector.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  '        ("Procurement Category", _first(record, "procurement_category", "category")),\n        ("Procurement Method", _first(record, "procurement_method", "procurement_method_name")),\n',
+                  '        ("Procurement Category", _first(record, "procurement_category", "category")),\n        ("Procurement Group", _first(record, "procurement_group")),\n        ("Procurement Method", _first(record, "procurement_method", "procurement_method_name")),\n',
+              ),
+              (
+                  '        "project_name": _first(record, "project_name", "project_title"),\n        "submission_deadline_date": _first(\n',
+                  '        "project_name": _first(record, "project_name", "project_title"),\n        "procurement_group": _first(record, "procurement_group"),\n        "procurement_method_code": _first(record, "procurement_method_code"),\n        "procurement_method_name": _first(record, "procurement_method_name", "procurement_method"),\n        "submission_deadline_date": _first(\n',
+              ),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'connector patch anchor not found: {old[:90]!r}')
+              text = text.replace(old, new, 1)
+          connector.write_text(text, encoding='utf-8')
+
+          candidate = Path('apps/api/app/candidate_pipeline.py')
+          text = candidate.read_text(encoding='utf-8')
+          old = '''        metadata_country = str(document.connector_metadata.get("country") or "").strip()\n        if discovery.country == "待识别" and metadata_country:\n            discovery = discovery.model_copy(update={"country": metadata_country})\n\n        # Re-enter a short locked transaction after the expensive external/model call.'''
+          new = '''        metadata_country = str(document.connector_metadata.get("country") or "").strip()\n        if discovery.country == "待识别" and metadata_country:\n            discovery = discovery.model_copy(update={"country": metadata_country})\n        procurement_group = str(\n            document.connector_metadata.get("procurement_group") or ""\n        ).strip().upper()\n        if (\n            mode == "deterministic"\n            and discovery.sector == "待识别"\n            and procurement_group in {"CS", "NC"}\n        ):\n            discovery = discovery.model_copy(\n                update={\n                    "project_detected": False,\n                    "confidence": min(discovery.confidence, 0.45),\n                    "summary": (\n                        "结构化采购分类表明该公告属于咨询/非咨询服务，且当前文本未识别出工程专业；"\n                        "保留来源记录但不进入工程项目候选箱。"\n                    ),\n                }\n            )\n\n        # Re-enter a short locked transaction after the expensive external/model call.'''
+          if old not in text:
+              raise SystemExit('candidate quality patch anchor not found')
+          candidate.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          runner = Path('scripts/run_persisted_real_source_pilot.py')
+          text = runner.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  '        if args.require_market_country and any(\n            item["country"] != source["market"] for item in draft_snapshots\n        ):\n            raise RuntimeError(\n                f"draft country did not preserve authoritative source market {source[\'market\']!r}"\n            )\n\n        after = {',
+                  '        if args.require_market_country and any(\n            item["country"] != source["market"] for item in draft_snapshots\n        ):\n            raise RuntimeError(\n                f"draft country did not preserve authoritative source market {source[\'market\']!r}"\n            )\n        if args.reject_unknown_sector_drafts and any(\n            item["sector"] == "待识别" for item in draft_snapshots\n        ):\n            raise RuntimeError("persisted pilot created a draft with unknown engineering sector")\n\n        after = {',
+              ),
+              (
+                  '    parser.add_argument("--require-market-country", action="store_true")\n',
+                  '    parser.add_argument("--require-market-country", action="store_true")\n    parser.add_argument("--reject-unknown-sector-drafts", action="store_true")\n',
+              ),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'runner patch anchor not found: {old[:90]!r}')
+              text = text.replace(old, new, 1)
+          runner.write_text(text, encoding='utf-8')
+
+          workflow = Path('.github/workflows/persisted-real-source-pilot.yml')
+          text = workflow.read_text(encoding='utf-8')
+          old = '          --require-new-draft\n          --require-market-country\n'
+          new = '          --require-new-draft\n          --require-market-country\n          --reject-unknown-sector-drafts\n'
+          if old not in text:
+              raise SystemExit('workflow command patch anchor not found')
+          workflow.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add apps/api/app/connectors/worldbank_procurement.py apps/api/app/candidate_pipeline.py scripts/run_persisted_real_source_pilot.py .github/workflows/persisted-real-source-pilot.yml
+          git diff --cached --check
+          git commit -m "fix: filter non-engineering service notices from candidates"
+          git push
