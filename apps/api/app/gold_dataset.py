@@ -78,14 +78,19 @@ def is_known_aggregate_listing(url: str) -> bool:
     """Reject known listing/search pages that mix many projects into one Gold input.
 
     AfDB's individual document pages live directly under ``/<lang>/documents/<slug>`` or are
-    direct files under ``/sites/...``. Paths under ``documents/project-related-procurement``
-    are category/listing pages and are unsuitable as one-sample-one-source Gold evidence.
+    direct files under ``/sites/...``. The category/listing namespace under
+    ``/<lang>/documents/project-related-procurement`` is unsuitable as one-sample-one-source
+    Gold evidence.
     """
 
     parsed = urlparse(url.strip())
     host = (parsed.hostname or "").lower()
     path = parsed.path.lower().rstrip("/")
-    return host.endswith("afdb.org") and "/documents/project-related-procurement" in path
+    listing_prefixes = tuple(
+        f"/{language}/documents/project-related-procurement"
+        for language in ("en", "fr", "ar", "pt")
+    )
+    return host.endswith("afdb.org") and path.startswith(listing_prefixes)
 
 
 def load_gold_dataset(
