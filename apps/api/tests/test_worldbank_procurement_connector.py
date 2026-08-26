@@ -31,6 +31,7 @@ def _payload() -> bytes:
                     "bid_description": "Supply and Installation of Smart Meters",
                     "procurement_method": "Request for Bids",
                     "contact_organization": "Nigeria Electricity Regulatory Commission",
+                    "contact_address": "12 Airport Road, Abuja",
                 },
                 "OP00470002": {
                     "id": "OP00470002",
@@ -73,9 +74,11 @@ def test_worldbank_procurement_connector_normalizes_notices(monkeypatch):
     assert first.metadata["notice_id"] == "OP00470001"
     assert first.metadata["country"] == "Nigeria"
     assert first.metadata["project_id"] == "P172891"
+    assert first.metadata["contact_address"] == "12 Airport Road, Abuja"
     assert "Notice Type: Invitation for Bids" in first.text
     assert "Project: Nigeria Distribution Sector Recovery Program" in first.text
     assert "Description: Supply and Installation of Smart Meters" in first.text
+    assert "Airport Road" not in first.text
     assert first.canonical_url.endswith("format=json&id=OP00470001")
     assert result.source_raw_sha256 in result.raw_objects
 
