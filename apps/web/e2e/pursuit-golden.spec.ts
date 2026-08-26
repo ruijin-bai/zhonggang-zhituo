@@ -21,7 +21,15 @@ test("admin can create an assigned Pursuit Work Item through the real BFF", asyn
     .locator('select[name="assignee_membership_id"]')
     .selectOption({ label: "智拓管理员 · admin" });
   await createForm.locator('select[name="priority"]').selectOption("high");
+
+  const mutationCompleted = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/pursuit/mutate") &&
+      response.request().method() === "POST" &&
+      response.ok(),
+  );
   await createForm.getByRole("button", { name: "创建 Work Item", exact: true }).click();
+  await mutationCompleted;
 
   await page.goto("/pursuit");
   await expect(page.getByRole("heading", { level: 1, name: "我的经营工作" })).toBeVisible();
