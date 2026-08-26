@@ -7,7 +7,6 @@ from app.connectors import connector_kinds
 from app.connectors.worldbank_procurement import WorldBankProcurementConnector
 from app.web_fetch import PublicResource
 
-
 SOURCE_URL = (
     "https://search.worldbank.org/api/v2/procnotices"
     "?format=json&rows=25&os=0&project_ctry_name=Nigeria"
