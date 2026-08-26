@@ -30,7 +30,7 @@ jobs:
           node --input-type=module <<'NODE'
           import { chromium } from '@playwright/test';
 
-          const url = 'https://www.afdb.org/en/documents/spn-gambia-rehabilitation-and-development-rice-irrigation-scheme-and-construction-access-and-feeder-roads-reward-gambia';
+          const url = 'https://www.afdb.org/en/documents/spn-gambia-rehabilitation-and-development-rice-irrigation-scheme-and-construction-access-feeder-roads-reward-gambia';
           const browser = await chromium.launch({ headless: true });
           const page = await browser.newPage({ locale: 'en-US' });
           const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
