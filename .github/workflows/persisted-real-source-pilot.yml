@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-      - test/persisted-real-source-pilot
     paths:
       - 'apps/api/app/candidate_pipeline.py'
       - 'apps/api/app/connectors/worldbank_procurement.py'
