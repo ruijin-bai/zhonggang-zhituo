@@ -50,11 +50,20 @@ def _load_manifest(path: Path) -> list[dict]:
     return normalized
 
 
-def _discovery_payload(discovery) -> dict:
+def _discovery_payload(discovery, *, metadata: dict) -> dict:
+    extracted_country = discovery.country
+    metadata_country = str(metadata.get("country") or "").strip()
+    if extracted_country == "待识别" and metadata_country:
+        country = metadata_country
+        country_source = "structured_source_metadata"
+    else:
+        country = extracted_country
+        country_source = "extraction"
     return {
         "project_detected": discovery.project_detected,
         "title": discovery.title,
-        "country": discovery.country,
+        "country": country,
+        "country_source": country_source,
         "sector": discovery.sector,
         "stage": discovery.stage,
         "owner": discovery.owner,
@@ -111,7 +120,7 @@ async def run_source(
                     "content_sha256": document.content_sha256,
                     "metadata": document.metadata,
                     "extraction_mode": mode,
-                    "discovery": _discovery_payload(discovery),
+                    "discovery": _discovery_payload(discovery, metadata=document.metadata),
                 }
             )
         return {
