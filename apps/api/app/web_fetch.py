@@ -9,6 +9,11 @@ import httpx
 MAX_PAGE_BYTES = 2_000_000
 MAX_REDIRECTS = 3
 ALLOWED_CONTENT_TYPES = ("text/html", "text/plain", "application/xhtml+xml")
+PUBLIC_FETCH_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/151.0.0.0 Safari/537.36"
+)
 
 
 @dataclass(frozen=True)
@@ -136,8 +141,10 @@ async def fetch_public_resource(
 
     current = validate_public_url(url)
     headers = {
-        "User-Agent": "Zhonggang-Zhituo/0.16 (+market-intelligence; public-source-reader)",
+        "User-Agent": PUBLIC_FETCH_USER_AGENT,
         "Accept": accept,
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
     }
     if if_none_match:
         headers["If-None-Match"] = if_none_match
