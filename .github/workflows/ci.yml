@@ -103,6 +103,9 @@ jobs:
           ../../ops/postgres/backup.sh
           ../../ops/postgres/restore.sh
           ../../scripts/configure-github-ruleset.sh
+          ../../scripts/staging-up.sh
+          ../../scripts/staging-smoke.sh
+          ../../scripts/staging-down.sh
       - name: Apply database migrations on clean PostgreSQL
         run: uv run alembic upgrade head
       - name: Verify latest migration downgrade and re-upgrade
@@ -287,12 +290,44 @@ jobs:
           ZHITUO_API_ENV_FILE=/tmp/zhituo-api.env \
           ZHITUO_WEB_ENV_FILE=/tmp/zhituo-web.env \
           docker compose -f deploy/docker-compose.production.yml config --quiet
+      - name: Validate staging Compose topology
+        run: docker compose --env-file deploy/staging/.env.example -f deploy/staging/docker-compose.yml config --quiet
       - name: Build API production image
         run: docker build --pull -t zhituo-api:ci apps/api
       - name: Smoke import API production image
         run: docker run --rm --entrypoint python zhituo-api:ci -c "import app.main; print('api-import-ok')"
       - name: Build Web production image from locked workspace
         run: docker build --pull -f apps/web/Dockerfile -t zhituo-web:ci .
+      - name: Prepare isolated CI staging environment
+        run: |
+          cat > /tmp/zhituo-staging.env <<'EOF'
+          ZHITUO_API_IMAGE=zhituo-api:ci
+          ZHITUO_WEB_IMAGE=zhituo-web:ci
+          POSTGRES_PASSWORD=ci-staging-postgres-password
+          MINIO_ROOT_USER=zhituo-ci
+          MINIO_ROOT_PASSWORD=ci-staging-minio-password-123456
+          STAGING_WEB_PORT=3001
+          STAGING_POSTGRES_PORT=55432
+          STAGING_SMTP_PORT=1025
+          STAGING_MAILPIT_PORT=8025
+          STAGING_MINIO_API_PORT=9000
+          STAGING_MINIO_CONSOLE_PORT=9001
+          CELERY_WORKER_CONCURRENCY=1
+          EOF
+      - name: Run full staging integration smoke
+        env:
+          ZHITUO_STAGING_ENV_FILE: /tmp/zhituo-staging.env
+          ZHITUO_STAGING_SKIP_BUILD: "true"
+        run: bash scripts/staging-up.sh
+      - name: Clean isolated staging environment
+        if: always()
+        env:
+          ZHITUO_STAGING_ENV_FILE: /tmp/zhituo-staging.env
+          CONFIRM_PURGE: "YES"
+        run: |
+          if [ -f /tmp/zhituo-staging.env ]; then
+            bash scripts/staging-down.sh --purge || true
+          fi
 
   security:
     runs-on: ubuntu-latest

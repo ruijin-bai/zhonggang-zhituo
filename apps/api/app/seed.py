@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from importlib.resources import files
 from uuid import uuid4
 
 from sqlalchemy import delete, select
@@ -34,7 +34,7 @@ from .pursuit_legacy import sync_legacy_tracking_snapshot
 from .pursuit_reminder_db import PursuitReminderRecord
 from .scoring import calculate_score
 
-DATA_FILE = Path(__file__).resolve().parents[3] / "data" / "demo" / "opportunities.json"
+DATA_FILE = files("app").joinpath("demo_data/opportunities.json")
 HERO_ID = "west-africa-port-access-corridor"
 
 

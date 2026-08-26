@@ -16,6 +16,7 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 
 RUN uv sync --locked --no-dev --no-editable \
+    && /app/.venv/bin/python -c "from app.seed import DATA_FILE; assert DATA_FILE.is_file(); print('demo-seed-asset-ok')" \
     && /app/.venv/bin/python -m compileall -q app
 
 USER zhituo

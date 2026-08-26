@@ -1,0 +1,245 @@
+name: zhituo-staging
+
+x-api-runtime: &api-runtime
+  image: ${ZHITUO_API_IMAGE:?Set ZHITUO_API_IMAGE}
+  environment: &api-environment
+    APP_ENV: test
+    DATA_BACKEND: database
+    DATABASE_URL: postgresql+psycopg://zhituo:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/zhituo
+    DATABASE_RLS_ENABLED: "true"
+    JOB_MODE: queue
+    REDIS_URL: redis://redis:6379/0
+    DEMO_MODE: "true"
+    ALLOW_DEMO_FALLBACK: "false"
+    AUTH_MODE: development_header
+    DEV_USER_EMAIL: admin@zhituo.local
+    DOCUMENT_STORE_BACKEND: s3
+    DOCUMENT_STORE_S3_BUCKET: zhituo-staging-documents
+    DOCUMENT_STORE_S3_REGION: us-east-1
+    DOCUMENT_STORE_S3_ENDPOINT_URL: http://minio:9000
+    DOCUMENT_STORE_S3_FORCE_PATH_STYLE: "true"
+    AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER}
+    AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
+    PURSUIT_EMAIL_DELIVERY_ENABLED: "true"
+    SMTP_HOST: mailpit
+    SMTP_PORT: "1025"
+    SMTP_STARTTLS: "false"
+    SMTP_USE_SSL: "false"
+    SMTP_FROM_EMAIL: zhituo-staging@example.invalid
+    SMTP_FROM_NAME: 中港智拓 Staging
+    NOTIFICATION_PUBLIC_BASE_URL: http://127.0.0.1:${STAGING_WEB_PORT:-3001}
+    METRICS_ENABLED: "true"
+    LOG_LEVEL: INFO
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    - backend
+    - egress
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: zhituo
+      POSTGRES_USER: zhituo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${STAGING_POSTGRES_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhituo -d zhituo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      - backend
+      - inspection
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      - backend
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "127.0.0.1:${STAGING_MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${STAGING_MINIO_CONSOLE_PORT:-9001}:9001"
+    restart: unless-stopped
+    networks:
+      - backend
+      - inspection
+
+  mailpit:
+    image: axllent/mailpit:v1.30.1
+    environment:
+      MP_MAX_MESSAGES: "5000"
+      MP_DATABASE: /data/mailpit.db
+    volumes:
+      - mailpit-data:/data
+    ports:
+      - "127.0.0.1:${STAGING_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${STAGING_MAILPIT_PORT:-8025}:8025"
+    restart: unless-stopped
+    networks:
+      - backend
+      - inspection
+
+  object-store-init:
+    <<: *api-runtime
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_started
+    command:
+      - python
+      - -c
+      - |
+        import os, time
+        import boto3
+        from botocore.exceptions import ClientError, EndpointConnectionError
+        bucket = os.environ["DOCUMENT_STORE_S3_BUCKET"]
+        client = boto3.client(
+            "s3",
+            endpoint_url=os.environ["DOCUMENT_STORE_S3_ENDPOINT_URL"],
+            region_name=os.environ["DOCUMENT_STORE_S3_REGION"],
+        )
+        for attempt in range(60):
+            try:
+                client.head_bucket(Bucket=bucket)
+                print(f"bucket-ready:{bucket}")
+                break
+            except ClientError as exc:
+                code = str(exc.response.get("Error", {}).get("Code", ""))
+                if code in {"404", "NoSuchBucket", "NotFound"}:
+                    try:
+                        client.create_bucket(Bucket=bucket)
+                        print(f"bucket-created:{bucket}")
+                        break
+                    except (ClientError, EndpointConnectionError):
+                        pass
+            except EndpointConnectionError:
+                pass
+            time.sleep(1)
+        else:
+            raise SystemExit("MinIO bucket did not become ready")
+
+  migrate:
+    <<: *api-runtime
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      object-store-init:
+        condition: service_completed_successfully
+    command: ["alembic", "upgrade", "head"]
+
+  seed:
+    <<: *api-runtime
+    restart: "no"
+    profiles: ["demo"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["zhituo-api", "seed"]
+
+  api:
+    <<: *api-runtime
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      object-store-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+
+  worker:
+    <<: *api-runtime
+    command: ["celery", "-A", "app.celery_app.celery_app", "worker", "--loglevel=INFO", "--concurrency=${CELERY_WORKER_CONCURRENCY:-2}"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      object-store-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+
+  beat:
+    <<: *api-runtime
+    command: ["celery", "-A", "app.celery_app.celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    image: ${ZHITUO_WEB_IMAGE:?Set ZHITUO_WEB_IMAGE}
+    environment:
+      API_BASE_URL: http://api:8000
+      API_AUTH_MODE: development_header
+      NEXT_PUBLIC_ALLOW_DEMO_FALLBACK: "false"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:${STAGING_WEB_PORT:-3001}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - backend
+      - inspection
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  mailpit-data:
+
+networks:
+  backend:
+    internal: true
+  inspection:
+  egress:

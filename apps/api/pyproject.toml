@@ -39,6 +39,9 @@ where = ["."]
 include = ["app*"]
 exclude = ["alembic*", "tests*"]
 
+[tool.setuptools.package-data]
+app = ["demo_data/*.json"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
