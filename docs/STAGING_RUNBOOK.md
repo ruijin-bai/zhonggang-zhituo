@@ -38,6 +38,14 @@ Compose 还包含两个 one-shot lifecycle 服务：
 
 Demo seed 是显式 lifecycle 步骤，不属于业务服务。
 
+网络分层：
+
+- `backend` 为 `internal` 网络，承载 API 与 PostgreSQL / Redis / MinIO / Mailpit 等内部业务通信；
+- `inspection` 只挂载需要通过宿主机 `127.0.0.1` 检查的 PostgreSQL / MinIO / Mailpit / Web，使 loopback 端口真实可达，同时不取消 `backend` 的 internal 隔离；
+- `egress` 仅供需要对外访问的 API runtime / Worker / Beat / lifecycle 容器使用。
+
+所有宿主机发布端口仍只绑定 `127.0.0.1`，`inspection` 不等于对公网暴露服务。
+
 ## 3. 为什么 `APP_ENV=test`
 
 当前 Staging 是单机、内网测试环境，MinIO 使用 HTTP，Mailpit SMTP 不启用 TLS。API 的 production guardrails 正确禁止生产环境使用这些配置，因此 Staging 明确运行 `APP_ENV=test`，但仍主动开启生产关键边界：
