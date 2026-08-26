@@ -25,3 +25,9 @@ Thumbs.db
 
 # Runtime
 *.log
+
+# Gold evaluation runtime artifacts
+data/benchmark/source_cache/
+data/benchmark/source_provenance_report.json
+data/benchmark/latest_evaluation.json
+data/benchmark/ci_evaluation.json
