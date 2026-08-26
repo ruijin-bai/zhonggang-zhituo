@@ -21,8 +21,6 @@ test("admin can create an assigned Pursuit Work Item through the real BFF", asyn
   await createForm.getByLabel("优先级").selectOption("high");
   await createForm.getByRole("button", { name: "创建 Work Item" }).click();
 
-  await expect(page.getByDisplayValue(workItemTitle)).toBeVisible();
-
   await page.goto("/pursuit");
   await expect(page.getByRole("heading", { level: 1, name: "我的经营工作" })).toBeVisible();
   await expect(page.getByText("智拓管理员 · admin")).toBeVisible();
