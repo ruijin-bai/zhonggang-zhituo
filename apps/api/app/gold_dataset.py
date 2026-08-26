@@ -4,7 +4,7 @@ import json
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 REQUIRED_POSITIVE_FIELDS = (
     "sample_id",
@@ -57,6 +57,37 @@ def safety_constraints(sample: dict) -> dict:
     }
 
 
+def normalize_source_url(url: str) -> str:
+    """Normalize a source URL for duplicate detection without changing its resource identity."""
+
+    parsed = urlparse(url.strip())
+    path = parsed.path.rstrip("/") or "/"
+    return urlunparse(
+        (
+            parsed.scheme.lower(),
+            parsed.netloc.lower(),
+            path,
+            "",
+            parsed.query,
+            "",
+        )
+    )
+
+
+def is_known_aggregate_listing(url: str) -> bool:
+    """Reject known listing/search pages that mix many projects into one Gold input.
+
+    AfDB's individual document pages live directly under ``/<lang>/documents/<slug>`` or are
+    direct files under ``/sites/...``. Paths under ``documents/project-related-procurement``
+    are category/listing pages and are unsuitable as one-sample-one-source Gold evidence.
+    """
+
+    parsed = urlparse(url.strip())
+    host = (parsed.hostname or "").lower()
+    path = parsed.path.lower().rstrip("/")
+    return host.endswith("afdb.org") and "/documents/project-related-procurement" in path
+
+
 def load_gold_dataset(
     repository_root: Path,
     *,
@@ -100,6 +131,15 @@ def validate_gold_dataset(samples: list[dict], *, minimum_samples: int = 10) -> 
     if duplicates:
         errors.append(f"duplicate sample_id values: {', '.join(duplicates)}")
 
+    positive_urls = [
+        normalize_source_url(str(sample.get("source_url") or ""))
+        for sample in samples
+        if project_expected(sample) and str(sample.get("source_url") or "").strip()
+    ]
+    duplicate_urls = sorted(url for url, count in Counter(positive_urls).items() if count > 1)
+    if duplicate_urls:
+        errors.append(f"duplicate positive source_url values: {', '.join(duplicate_urls)}")
+
     positives = 0
     negatives = 0
     countries: set[str] = set()
@@ -123,6 +163,8 @@ def validate_gold_dataset(samples: list[dict], *, minimum_samples: int = 10) -> 
             parsed = urlparse(url)
             if parsed.scheme != "https" or not parsed.netloc:
                 errors.append(f"{sample_id}: source_url must be an absolute HTTPS URL")
+            if is_known_aggregate_listing(url):
+                errors.append(f"{sample_id}: source_url must identify one document, not an aggregate listing")
 
         evidence = sample.get("gold_evidence") or []
         forbidden = sample.get("must_not_infer") or []
