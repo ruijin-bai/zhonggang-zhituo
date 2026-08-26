@@ -4,11 +4,13 @@ from .base import ConnectorFetchOutcome, ConnectorResult, SourceConnector
 from .html import HtmlConnector
 from .pdf import PdfConnector
 from .rss import RssConnector
+from .worldbank_procurement import WorldBankProcurementConnector
 
 _CONNECTORS: dict[str, SourceConnector] = {
     "html": HtmlConnector(),
     "rss": RssConnector(),
     "pdf": PdfConnector(),
+    "worldbank_procurement": WorldBankProcurementConnector(),
 }
 
 
