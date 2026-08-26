@@ -96,7 +96,7 @@ info "Starting API, Worker, Beat and Web"
 compose up -d api worker beat web
 
 info "Running staging smoke checks"
-ZHITUO_STAGING_ENV_FILE="$ENV_FILE" "$ROOT_DIR/scripts/staging-smoke.sh"
+ZHITUO_STAGING_ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/staging-smoke.sh"
 
 cat <<EOF
 
