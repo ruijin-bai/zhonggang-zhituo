@@ -44,30 +44,40 @@ Safety 不再通过“在 JSON 字符串中搜索 `win probability` 之类标签
 
 ### 真实来源评测
 
-真实来源评测流程：
+真实来源必须先形成可审计 snapshot，再进行评测：
 
 ```bash
 python scripts/cache_gold_sources.py
+python scripts/verify_gold_sources.py
 python scripts/run_gold_pipeline.py --mode source-text
 ```
 
-只有全部真实 Gold 样本都具备真实 `source_text` / `source_cache`，且报告显示：
+HTML 和 PDF 都由同一缓存工具处理。每个 `<sample_id>.txt` snapshot 必须包含：
 
-```text
-publishable: true
-```
+- Gold 中登记的原始 `ORIGIN_SOURCE_URL`；
+- 实际获取后的 `RESOLVED_URL`；
+- 页面/文档标题和抓取时间；
+- 原始载荷 SHA-256 与大小；
+- 规范化正文 SHA-256；
+- 真实来源正文。
 
-成绩才允许进入正式报告或竞赛材料。
+离线验证器会重新计算正文 SHA-256、核对 Gold source URL、检查每条 `gold_evidence` 是否真实存在，并拒绝重复正文。任何手工改写、来源替换或正文篡改都会使 snapshot 失效。
 
-如配置了 AI Provider，可运行：
+**只有 13/13 Gold 样本全部为 `verified-snapshot`，`source-text` 报告才允许 `publishable=true`。** 直接把 `source_text` 写进 Gold 即使可以参与调试，也只会标记为 `embedded-unverified`，不得形成正式成绩。
+
+如配置 AI Provider，可运行：
 
 ```bash
 python scripts/run_gold_pipeline.py --mode source-text --ai
 ```
 
-以完全相同的真实 Gold corpus 分别跑 deterministic 与 AI，才能形成有意义的模型增益对比。
+以完全相同、已验证的真实来源 snapshot 分别跑 deterministic 与 AI，才能形成有意义的模型增益对比。
 
-HTML 官方页面可由缓存工具自动抓取；PDF 来源仍明确标记为人工缓存，不允许用 Gold 摘要冒充原文。
+### 外部站点可用性边界
+
+2026-08-26 实测 AfDB 对 GitHub-hosted Actions 的 Azure 云出口返回 Cloudflare challenge / HTTP 403；普通 HTTP 客户端和真实 Chromium 均被拒绝。因此仓库**不保留一个明知会持续失败的定时抓取任务，也不绕过 Cloudflare challenge**。
+
+`cache_gold_sources.py` 应在能够正常访问官方公开来源的受控环境运行；随后 `verify_gold_sources.py` 可完全离线验证 snapshot。外部站点临时封禁某个云出口不能改变 Gold 正确性，也不能成为正式评测的单点依赖。
 
 ## 2. Gold Dataset Contract
 
@@ -75,6 +85,8 @@ CI/评测前会验证：
 
 - `sample_id` 唯一；
 - 真实正样本来源必须为绝对 HTTPS URL；
+- 每个真实正样本必须对应**一个具体官方文档/页面**，AfDB 聚合采购列表页禁止作为 Gold 输入；
+- 真实正样本 `source_url` 不得重复；
 - 必须有国家、专业、阶段、标题、业主、融资、采购信号等 Gold 字段；
 - 必须至少包含一条 `gold_evidence`；
 - 必须至少包含一条 `must_not_infer`；

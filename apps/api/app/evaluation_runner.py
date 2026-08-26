@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .ai import AIService
 from .evaluation import evaluate_sample, summarize
+from .source_snapshot import verify_source_snapshot
 
 
 @dataclass(frozen=True)
@@ -14,6 +15,7 @@ class PipelineEvaluationReport:
     samples_evaluated: int
     samples_skipped: int
     extraction_modes: dict[str, int]
+    source_provenance: dict[str, str]
     summary: dict
     results: list[dict]
     note: str
@@ -37,33 +39,28 @@ def _fixture_text(sample: dict) -> str:
     return "\n".join(part for part in parts if part)
 
 
-def _cached_source_input(raw: str, fallback_title: str) -> tuple[str, str]:
-    """Read fetch metadata without leaking Gold labels into a real-source evaluation."""
-    page_title = fallback_title
-    body = raw.strip()
-    if body.startswith("SOURCE_URL:"):
-        header, separator, remainder = body.partition("\n\n")
-        if separator:
-            for line in header.splitlines():
-                if line.startswith("SOURCE_TITLE:"):
-                    candidate = line.removeprefix("SOURCE_TITLE:").strip()
-                    if candidate:
-                        page_title = candidate
-            body = remainder.strip()
-    return body, page_title
+def _source_input(
+    sample: dict,
+    source_cache_dir: Path | None,
+) -> tuple[str, str, str]:
+    """Load source text and classify whether it is cryptographically traceable."""
 
-
-def _source_input(sample: dict, source_cache_dir: Path | None) -> tuple[str, str]:
     fallback_title = str(sample.get("source_name") or "公开来源").strip() or "公开来源"
     embedded = str(sample.get("source_text") or "").strip()
     if embedded:
         page_title = str(sample.get("source_page_title") or fallback_title).strip() or fallback_title
-        return embedded, page_title
+        return embedded, page_title, "embedded-unverified"
+
     if source_cache_dir:
         path = source_cache_dir / f"{sample['sample_id']}.txt"
         if path.exists():
-            return _cached_source_input(path.read_text(encoding="utf-8"), fallback_title)
-    return "", fallback_title
+            try:
+                snapshot = verify_source_snapshot(sample, path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                return "", fallback_title, f"invalid-snapshot: {exc}"
+            return snapshot.text, snapshot.source_title or fallback_title, "verified-snapshot"
+
+    return "", fallback_title, "missing-snapshot"
 
 
 def _procurement_signal(discovery) -> str:
@@ -121,13 +118,17 @@ async def evaluate_pipeline(
     service = service or AIService()
     results = []
     modes: dict[str, int] = {}
+    provenance: dict[str, str] = {}
     skipped = 0
     for sample in samples:
+        sample_id = str(sample.get("sample_id") or "unknown")
         if input_mode == "source-text":
-            text, page_title = _source_input(sample, source_cache_dir)
+            text, page_title, source_status = _source_input(sample, source_cache_dir)
+            provenance[sample_id] = source_status
         else:
             text = _fixture_text(sample)
             page_title = sample.get("title") or sample.get("source_name") or "公开来源"
+            provenance[sample_id] = "fixture"
         if not text:
             skipped += 1
             continue
@@ -141,19 +142,25 @@ async def evaluate_pipeline(
         item = evaluate_sample(sample, prediction)
         item["prediction"] = prediction
         item["extraction_mode"] = mode
+        item["source_provenance"] = provenance[sample_id]
         results.append(item)
     summary = asdict(summarize(results))
     contains_synthetic = any(
         sample.get("sample_kind") == "synthetic-regression" for sample in samples
+    )
+    all_sources_verified = bool(samples) and all(
+        provenance.get(str(sample.get("sample_id") or "unknown")) == "verified-snapshot"
+        for sample in samples
     )
     publishable = (
         input_mode == "source-text"
         and skipped == 0
         and bool(results)
         and not contains_synthetic
+        and all_sources_verified
     )
     note = (
-        "基于缓存的真实来源正文与抓取时页面标题，可用于正式评测。"
+        "全部输入来自 URL 对应、正文 SHA-256 自校验且 Gold evidence 可复核的来源快照，可用于正式评测。"
         if publishable
         else (
             "fixture 模式仅用于工程回归，输入由 Gold 字段或显式合成负样本构造，严禁将该结果作为比赛或业务准确率。"
@@ -161,7 +168,7 @@ async def evaluate_pipeline(
             else (
                 "当前评测包含 synthetic-regression 样本，严禁标记为正式准确率。"
                 if contains_synthetic
-                else "部分或全部样本缺少真实来源正文缓存；当前结果不可作为正式准确率。"
+                else "真实来源输入尚未全部通过 snapshot provenance 校验；当前结果不可作为正式准确率。"
             )
         )
     )
@@ -172,6 +179,7 @@ async def evaluate_pipeline(
         len(results),
         skipped,
         modes,
+        provenance,
         summary,
         results,
         note,

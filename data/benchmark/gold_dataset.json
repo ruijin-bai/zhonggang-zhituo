@@ -1,152 +1,235 @@
 [
   {
-    "sample_id":"afdb-ng-abia-2026-01",
-    "source_name":"AfDB - Abia State Integrated Infrastructure Development Project",
-    "source_url":"https://www.afdb.org/sites/default/files/documents/project-related-procurement/invitation_for_bids_lot_1-_absiidp_final_14th_may.pdf",
-    "published_at":"2026-05-14",
-    "country":"Nigeria",
-    "sector":"Road",
-    "stage":"Invitation for Bids / formal procurement",
-    "title":"Construction of 2 Pilot Roads in Aba under AfDB Funded Roads",
-    "owner":"Abia State Government (ABSIIDP State PIU)",
-    "financing":"African Development Bank financing received",
-    "procurement_signal":"Open Competitive Bidding (International)",
-    "gold_evidence":["has received financing from the African Development Bank","Construction of 2 Pilot Roads in Aba","Open Competitive Bidding (International)"],
-    "must_not_infer":["CHEC win probability","client preference","competitor identity","private relationships"]
+    "sample_id": "afdb-ng-abia-2026-01",
+    "source_name": "AfDB - Abia State Integrated Infrastructure Development Project",
+    "source_url": "https://www.afdb.org/sites/default/files/documents/project-related-procurement/invitation_for_bids_lot_1-_absiidp_final_14th_may.pdf",
+    "published_at": "2026-05-14",
+    "country": "Nigeria",
+    "sector": "Road",
+    "stage": "Invitation for Bids / formal procurement",
+    "title": "Construction of 2 Pilot Roads in Aba under AfDB Funded Roads",
+    "owner": "Abia State Government (ABSIIDP State PIU)",
+    "financing": "African Development Bank financing received",
+    "procurement_signal": "Open Competitive Bidding (International)",
+    "gold_evidence": [
+      "has received financing from the African Development Bank",
+      "Construction of 2 Pilot Roads in Aba",
+      "Open Competitive Bidding (International)"
+    ],
+    "must_not_infer": [
+      "CHEC win probability",
+      "client preference",
+      "competitor identity",
+      "private relationships"
+    ]
   },
   {
-    "sample_id":"afdb-ng-ebonyi-2026-02",
-    "source_name":"AfDB - Ebonyi State Ring Road Project",
-    "source_url":"https://www.afdb.org/en/projects-and-operations/p-ng-db0-014",
-    "published_at":"2026-08-04",
-    "country":"Nigeria",
-    "sector":"Road",
-    "stage":"Invitation for Bids / formal procurement",
-    "title":"Asphalt Overlay and Ancilliary Road Infrastructure Works Under the Ebonyi State Ring Road Project",
-    "owner":"Ebonyi State Government (Ministry of Works & Transport – SPIU)",
-    "financing":"African Development Bank financing received",
-    "procurement_signal":"IFB published",
-    "gold_evidence":["IFB - Nigeria - Asphalt Overlay and Ancilliary Road Infrastructure Works Under the Ebonyi State Ring Road Project","has received financing from the African Development Bank"],
-    "must_not_infer":["bid price","preferred bidder","client attitude","win probability"]
+    "sample_id": "afdb-ng-ebonyi-2026-02",
+    "source_name": "AfDB - Ebonyi State Ring Road Project",
+    "source_url": "https://www.afdb.org/en/documents/ifb-nigeria-asphalt-overlay-and-ancilliary-road-infrastructure-works-under-ebonyi-state-ring-road-project",
+    "published_at": "2026-08-04",
+    "country": "Nigeria",
+    "sector": "Road",
+    "stage": "Invitation for Bids / formal procurement",
+    "title": "Asphalt Overlay and Ancilliary Road Infrastructure Works Under the Ebonyi State Ring Road Project",
+    "owner": "Ebonyi State Government (Ministry of Works & Transport - SPIU)",
+    "financing": "African Development Bank financing received",
+    "procurement_signal": "IFB published",
+    "gold_evidence": [
+      "Asphalt Overlay and Ancilliary Road Infrastructure Works Under the Ebonyi State Ring Road Project",
+      "has received financing from the African Development Bank"
+    ],
+    "must_not_infer": [
+      "bid price",
+      "preferred bidder",
+      "client attitude",
+      "win probability"
+    ]
   },
   {
-    "sample_id":"afdb-mz-n381-schools-2026-03",
-    "source_name":"AfDB - SADC Sub Regional Transport and Trade Facilitation Project",
-    "source_url":"https://www.afdb.org/en/documents/spn-mozambique-construction-primary-schools-and-secondary-school-five-05-communities-along-n381-road-between-mueda-and-ngapa-district-mueda-sadc-sub-regional-transport-and-trade-facilitation-project",
-    "published_at":"2026-06-10",
-    "country":"Mozambique",
-    "sector":"Transport-related social infrastructure",
-    "stage":"Specific Procurement Notice / formal procurement",
-    "title":"Construction of Primary Schools and a Secondary School in five communities along the N381 Road between Mueda and Ngapa",
-    "owner":"Republic of Mozambique",
-    "financing":"African Development Fund and European Union financing received",
-    "procurement_signal":"SPN published",
-    "gold_evidence":["has received financing from the African Development Fund","European Union","Construction of Primary Schools and a Secondary School","R1251 Road Section of 59 km","5.4 km of the Mueda Town Bypass"],
-    "must_not_infer":["contract award","bidder ranking","client preference"]
+    "sample_id": "afdb-mz-n381-schools-2026-03",
+    "source_name": "AfDB - SADC Sub Regional Transport and Trade Facilitation Project",
+    "source_url": "https://www.afdb.org/en/documents/spn-mozambique-construction-primary-schools-and-secondary-school-five-05-communities-along-n381-road-between-mueda-and-ngapa-district-mueda-sadc-sub-regional-transport-and-trade-facilitation-project",
+    "published_at": "2026-06-10",
+    "country": "Mozambique",
+    "sector": "Transport-related social infrastructure",
+    "stage": "Specific Procurement Notice / formal procurement",
+    "title": "Construction of Primary Schools and a Secondary School in five communities along the N381 Road between Mueda and Ngapa",
+    "owner": "Republic of Mozambique",
+    "financing": "African Development Fund and European Union financing received",
+    "procurement_signal": "SPN published",
+    "gold_evidence": [
+      "has received financing from the African Development Fund",
+      "European Union",
+      "Construction of Primary Schools and a Secondary School",
+      "R1251 Road Section of 59 km",
+      "5.4 km of the Mueda Town Bypass"
+    ],
+    "must_not_infer": [
+      "contract award",
+      "bidder ranking",
+      "client preference"
+    ]
   },
   {
-    "sample_id":"afdb-ng-ogun-sapz-2026-04",
-    "source_name":"AfDB Specific Procurement Notices",
-    "source_url":"https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/specific-procurement-notices",
-    "published_at":"2026-07-30",
-    "country":"Nigeria",
-    "sector":"Road / agro-industrial infrastructure",
-    "stage":"Specific Procurement Notice",
-    "title":"Construction of 2 ATCs and 32Km Connecting Roads in Ogun State - Special Agro-Industrial Processing Zones Program Contract",
-    "owner":"Not established in this gold record",
-    "financing":"Not asserted beyond official AfDB procurement publication",
-    "procurement_signal":"SPN published",
-    "gold_evidence":["Construction of 2 ATCs and 32Km Connecting Roads in Ogun State","Special Agro-Industrial Processing Zones Program Contract"],
-    "must_not_infer":["specific employer if not fetched","financing amount","preferred bidder","win probability"]
+    "sample_id": "afdb-ng-ogun-sapz-2026-04",
+    "source_name": "AfDB - Special Agro-Industrial Processing Zones Program",
+    "source_url": "https://www.afdb.org/en/documents/spn-nigeria-construction-2-atcs-and-32km-connecting-roads-ogun-state-special-agro-industrial-processing-zones-program-contract",
+    "published_at": "2026-07-30",
+    "country": "Nigeria",
+    "sector": "Road / agro-industrial infrastructure",
+    "stage": "Specific Procurement Notice / formal procurement",
+    "title": "Construction of 2 ATCs and 32Km Connecting Roads in Ogun State - Special Agro-Industrial Processing Zones Program Contract",
+    "owner": "Federal Government of Nigeria",
+    "financing": "African Development Bank financing received",
+    "procurement_signal": "SPN published",
+    "gold_evidence": [
+      "Construction of 2 Agricultural - Transformation Centres",
+      "32km Connecting Roads in Ogun State",
+      "has received financing"
+    ],
+    "must_not_infer": [
+      "financing amount",
+      "preferred bidder",
+      "win probability"
+    ]
   },
   {
-    "sample_id":"afdb-et-web-water-2026-05",
-    "source_name":"AfDB Specific Procurement Notices",
-    "source_url":"https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/specific-procurement-notices",
-    "published_at":"2026-07-30",
-    "country":"Ethiopia",
-    "sector":"Water Supply",
-    "stage":"Specific Procurement Notice",
-    "title":"Web Water Supply Route civil works with pipe, fittings and electromechanical equipment from WER_1447 (Dembala Imu)",
-    "owner":"Not established in this gold record",
-    "financing":"Not asserted beyond official AfDB procurement publication",
-    "procurement_signal":"SPN published",
-    "gold_evidence":["Web Water Supply Route","Civil Works Construction","installation pipe and fittings","Electromechanical equipment","WER_1447 (Dembala Imu)"],
-    "must_not_infer":["contract value","client preference","competitor identity"]
+    "sample_id": "afdb-et-web-water-2026-05",
+    "source_name": "AfDB - Borena Resilient Water Development Phase II",
+    "source_url": "https://www.afdb.org/en/documents/spn-ethiopia-web-water-supply-route-civil-works-construction-installation-pipe-and-fittings-supply-pipe-and-fittings-web-water-supply-route-dofi-village-junction-wer1447-dembala-imu",
+    "published_at": "2026-07-30",
+    "country": "Ethiopia",
+    "sector": "Water Supply",
+    "stage": "Specific Procurement Notice / formal procurement",
+    "title": "Web Water Supply Route from Dofi Village Junction to WER_1447 (Dembala Imu): civil works and pipe supply",
+    "owner": "Federal Democratic Republic of Ethiopia",
+    "financing": "African Development Fund (Climate Action Window) financing received",
+    "procurement_signal": "SPN published",
+    "gold_evidence": [
+      "African Development Fund (ADF) (Climate Action Window)",
+      "Dofi Village Junction up to WER_1447 (Dembala Imu)",
+      "Galchet-Sarite Water Supply Project"
+    ],
+    "must_not_infer": [
+      "contract value",
+      "client preference",
+      "competitor identity"
+    ]
   },
   {
-    "sample_id":"afdb-mz-namaacha-boane-2026-06",
-    "source_name":"AfDB Specific Procurement Notices",
-    "source_url":"https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/specific-procurement-notices/energy-power/2",
-    "published_at":"2026-08-10",
-    "country":"Mozambique",
-    "sector":"Power Transmission",
-    "stage":"Specific Procurement Notice",
-    "title":"Design, Supply and Installation of the Namaacha–Boane 66 kV Transmission Line and Associated Substations infrastructure",
-    "owner":"Not established in this gold record",
-    "financing":"Not asserted beyond official AfDB procurement publication",
-    "procurement_signal":"SPN published",
-    "gold_evidence":["Namaacha–Boane 66 kV Transmission Line","Associated Substations infrastructure"],
-    "must_not_infer":["EPC winner","contract value","client attitude"]
+    "sample_id": "afdb-mz-namaacha-boane-2026-06",
+    "source_name": "AfDB - Namaacha - Boane Transmission Line and Associated Infrastructure Project",
+    "source_url": "https://www.afdb.org/en/documents/spn-mozambique-design-supply-and-installation-namaacha-boane-66-kv-transmission-line-and-associated-substations-infrastructure-namaacha-boane-transmission-line-and-associated-infrastructure-project",
+    "published_at": "2026-08-10",
+    "country": "Mozambique",
+    "sector": "Power Transmission",
+    "stage": "Specific Procurement Notice / formal procurement",
+    "title": "Design, Supply and Installation of the Namaacha-Boane 66 kV Transmission Line and Associated Substations infrastructure",
+    "owner": "Electricidade De Mozambique, E.P. (EDM)",
+    "financing": "African Development Fund financing received",
+    "procurement_signal": "Two contract lots published",
+    "gold_evidence": [
+      "Namaacha-Boane 66 kV Transmission Line",
+      "Associated Substations infrastructure",
+      "Electricidade De Mozambique"
+    ],
+    "must_not_infer": [
+      "EPC winner",
+      "contract value",
+      "client attitude"
+    ]
   },
   {
-    "sample_id":"afdb-dj-rn2-2026-07",
-    "source_name":"AfDB Invitation for Bids",
-    "source_url":"https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/invitation-for-bids/infrastructure/5",
-    "published_at":"2026-06-22",
-    "country":"Djibouti",
-    "sector":"Road",
-    "stage":"Invitation for Bids",
-    "title":"Strengthening and flood-proofing of National Road 2 from Nagad junction to Loyada (15.4 km)",
-    "owner":"Not established in this gold record",
-    "financing":"Not asserted beyond official AfDB procurement publication",
-    "procurement_signal":"Invitation for Bids published",
-    "gold_evidence":["Route Nationale 2 (RN2)","Nagad à Loyada","15.4 Km"],
-    "must_not_infer":["procurement evaluation criteria","preferred contractor","win probability"]
+    "sample_id": "afdb-dj-rn2-2026-07",
+    "source_name": "AfDB - Nagad-Loyada / Lowyaddo-Borama Road Improvement Project",
+    "source_url": "https://www.afdb.org/en/documents/aoi-djibouti-travaux-de-renforcement-et-mise-hors-deau-de-la-route-nationale-2-rn2-du-carrefour-de-nagad-loyada-154-km-projet-damelioration-de-la-route-nagad-loyada/lowyaddo-borama",
+    "published_at": "2026-06-22",
+    "country": "Djibouti",
+    "sector": "Road",
+    "stage": "Invitation for Bids / formal procurement",
+    "title": "Strengthening and flood-proofing of National Road 2 from Nagad junction to Loyada (15.4 km)",
+    "owner": "Government of Djibouti",
+    "financing": "African Development Bank financing received",
+    "procurement_signal": "International invitation for bids published",
+    "gold_evidence": [
+      "Route Nationale 2 (RN2)",
+      "Nagad à Loyada",
+      "15.4 Km"
+    ],
+    "must_not_infer": [
+      "procurement evaluation criteria",
+      "preferred contractor",
+      "win probability"
+    ]
   },
   {
-    "sample_id":"afdb-gm-reward-2026-08",
-    "source_name":"AfDB Invitation for Bids",
-    "source_url":"https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/invitation-for-bids/infrastructure/5",
-    "published_at":"2026-06-22",
-    "country":"Gambia",
-    "sector":"Irrigation and Feeder Roads",
-    "stage":"Procurement notice",
-    "title":"Rehabilitation and Development of Rice Irrigation Scheme, and Construction of Access & Feeder Roads - REWARD–Gambia",
-    "owner":"Not established in this gold record",
-    "financing":"Not asserted beyond official AfDB procurement publication",
-    "procurement_signal":"Procurement notice published",
-    "gold_evidence":["Rehabilitation and Development of Rice Irrigation Scheme","Construction of Access & Feeder Roads","REWARD–Gambia"],
-    "must_not_infer":["contract amount","competitor identity","client preference"]
+    "sample_id": "afdb-gm-reward-2026-08",
+    "source_name": "AfDB - REWARD-Gambia",
+    "source_url": "https://www.afdb.org/en/documents/spn-gambia-rehabilitation-and-development-rice-irrigation-scheme-and-construction-access-feeder-roads-reward-gambia",
+    "published_at": "2026-06-22",
+    "country": "Gambia",
+    "sector": "Irrigation and Feeder Roads",
+    "stage": "Specific Procurement Notice / formal procurement",
+    "title": "Rehabilitation and Development of Rice Irrigation Scheme, and Construction of Access & Feeder Roads - REWARD-Gambia",
+    "owner": "Government of The Gambia",
+    "financing": "African Development Bank grant financing secured",
+    "procurement_signal": "SPN published",
+    "gold_evidence": [
+      "Rehabilitation and Development of Rice Irrigation Scheme",
+      "Construction of Access & Feeder Roads",
+      "REWARD-Gambia"
+    ],
+    "must_not_infer": [
+      "contract amount",
+      "competitor identity",
+      "client preference"
+    ]
   },
   {
-    "sample_id":"afdb-sn-ter-2026-09",
-    "source_name":"AfDB Project-related Procurement",
-    "source_url":"https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/70",
-    "published_at":"2026-08-04",
-    "country":"Senegal",
-    "sector":"Rail / Urban Transport",
-    "stage":"Procurement plan published",
-    "title":"Projet Train Express Regional (Simplifié)",
-    "owner":"Not established in this gold record",
-    "financing":"Not asserted in this gold record",
-    "procurement_signal":"PPM published",
-    "gold_evidence":["PPM - Sénégal - Projet Train Express Regional (Simplifié)"],
-    "must_not_infer":["specific upcoming contract package","bid timeline beyond source","preferred bidder"]
+    "sample_id": "afdb-sn-ter-2026-09",
+    "source_name": "AfDB - Train Express Regional Phase I",
+    "source_url": "https://www.afdb.org/en/documents/senegal-projet-du-train-express-regional-phase-1-p-sn-dc0-003",
+    "published_at": "2026-04-17",
+    "country": "Senegal",
+    "sector": "Rail / Urban Transport",
+    "stage": "Project documentation / environmental and social assessment",
+    "title": "Projet du Train Express Regional - Phase 1 - P-SN-DC0-003",
+    "owner": "Government of Senegal / APIX-SA",
+    "financing": "African Development Bank project financing",
+    "procurement_signal": "Official project-level documentation published",
+    "gold_evidence": [
+      "Train Express Régional",
+      "Dakar",
+      "Diamniadio"
+    ],
+    "must_not_infer": [
+      "specific upcoming contract package",
+      "bid timeline beyond source",
+      "preferred bidder"
+    ]
   },
   {
-    "sample_id":"afdb-stp-rural-roads-2026-10",
-    "source_name":"AfDB Specific Procurement Notices",
-    "source_url":"https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/specific-procurement-notices/22",
-    "published_at":"2026-06-02",
-    "country":"São Tome and Príncipe",
-    "sector":"Rural Roads",
-    "stage":"Specific Procurement Notice",
-    "title":"Rehabilitation of Rural Paved Roads in the Água Izé–Claudino Faro–Mato Cana Community in São Tomé - PRIASAIII",
-    "owner":"Not established in this gold record",
-    "financing":"Not asserted beyond official AfDB procurement publication",
-    "procurement_signal":"SPN published",
-    "gold_evidence":["Rehabilitation of Rural Paved Roads","Água Izé–Claudino Faro–Mato Cana","PRIASAIII"],
-    "must_not_infer":["contract amount","contractor preference","private relationships"]
+    "sample_id": "afdb-stp-rural-roads-2026-10",
+    "source_name": "AfDB - PRIASA III",
+    "source_url": "https://www.afdb.org/en/documents/spn-sao-tome-and-principe-rehabilitation-rural-paved-roads-agua-ize-claudino-faro-mato-cana-community-sao-tome-co-management-climate-extremes-agriculture-and-fisheries-resilience-priasaiii",
+    "published_at": "2026-06-02",
+    "country": "São Tome and Príncipe",
+    "sector": "Rural Roads",
+    "stage": "Specific Procurement Notice / formal procurement",
+    "title": "Rehabilitation of Rural Paved Roads in the Água Izé-Claudino Faro-Mato Cana Community in São Tomé - PRIASAIII",
+    "owner": "Government of the Republic of São Tomé and Príncipe",
+    "financing": "African Development Fund and Global Environment Facility financing received",
+    "procurement_signal": "SPN published",
+    "gold_evidence": [
+      "rehabilitation of paved rural roads",
+      "Água Izé - Claudino Faro",
+      "PRIASA III"
+    ],
+    "must_not_infer": [
+      "contract amount",
+      "contractor preference",
+      "private relationships"
+    ]
   }
 ]
