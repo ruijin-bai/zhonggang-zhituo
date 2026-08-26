@@ -11,6 +11,7 @@ on:
       - 'data/benchmark/gold_dataset*.json'
       - 'scripts/cache_gold_sources.py'
       - 'apps/api/app/gold_dataset.py'
+      - 'apps/api/app/web_fetch.py'
       - 'apps/api/app/connectors/pdf.py'
       - '.github/workflows/gold-source-provenance.yml'
 
