@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 
+// Zhituo is an authenticated, tenant-scoped operating workspace. Server-side data access
+// forwards request identity/organization headers to the API, so rendering must happen at
+// request time rather than during static prerendering.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "中港智拓｜海外工程经营智能中枢",
   description: "海外工程经营操作系统的一层智能中枢",
