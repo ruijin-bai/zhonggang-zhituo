@@ -106,6 +106,17 @@ jobs:
           ../../scripts/staging-up.sh
           ../../scripts/staging-smoke.sh
           ../../scripts/staging-down.sh
+          ../../scripts/lib/pilot-common.sh
+          ../../scripts/pilot-up.sh
+          ../../scripts/pilot-down.sh
+          ../../scripts/pilot-update.sh
+          ../../scripts/pilot-health.sh
+          ../../scripts/pilot-backup.sh
+          ../../scripts/pilot-restore.sh
+          ../../scripts/pilot-logs.sh
+          ../../scripts/pilot-real-source.sh
+          ../../scripts/oci-free-preflight.sh
+          ../../scripts/oracle-pilot-bootstrap.sh
       - name: Apply database migrations on clean PostgreSQL
         run: uv run alembic upgrade head
       - name: Verify latest migration downgrade and re-upgrade
@@ -371,10 +382,94 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  pilot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare isolated Pilot configuration contract
+        run: |
+          cat > /tmp/zhituo-pilot.env <<'EOF'
+          ZHITUO_API_IMAGE=zhituo-api:pilot-ci
+          ZHITUO_WEB_IMAGE=zhituo-web:pilot-ci
+          DEPLOYED_GIT_SHA=ci
+          PREVIOUS_GIT_SHA=
+          POSTGRES_OWNER_PASSWORD=ci-owner-strong-random-value-123456
+          POSTGRES_RUNTIME_PASSWORD=ci-runtime-strong-random-value-123456
+          POSTGRES_BACKUP_PASSWORD=ci-backup-strong-random-value-123456
+          REDIS_PASSWORD=ci-redis-strong-random-value-123456
+          MINIO_ROOT_USER=zhituo-pilot-ci
+          MINIO_ROOT_PASSWORD=ci-minio-strong-random-value-123456
+          AUTH_PROXY_SECRET=ci-proxy-strong-random-value-1234567890
+          METRICS_TOKEN=ci-metrics-strong-random-value-1234567890
+          MINIO_BUCKET=zhituo-pilot-documents
+          PILOT_SECRETS_DIR=/tmp/zhituo-pilot-secrets
+          PILOT_BACKUP_DIR=/tmp/zhituo-pilot-backups
+          PILOT_BACKUP_RETENTION_DAYS=14
+          PILOT_BIND_ADDRESS=127.0.0.1
+          PILOT_HTTP_PORT=18080
+          PILOT_BASIC_AUTH_USER=pilot
+          PILOT_BASIC_AUTH_PASSWORD=ci-basic-auth-strong-value
+          PILOT_BASIC_AUTH_HASH='$2a$14$S0M9yLbKf7p1QAvXKe5RpehknbOmF/0uO5fP91t51pSKStWDQDSuy'
+          PILOT_ADMIN_EMAIL=pilot-ci@example.com
+          PILOT_ADMIN_DISPLAY_NAME=Pilot CI
+          PILOT_ORGANIZATION_NAME=Zhituo Pilot CI
+          PILOT_ORGANIZATION_CODE=ZHITUO-PILOT-CI
+          CELERY_WORKER_CONCURRENCY=1
+          AUTHENTICATED_RATE_LIMIT_PER_MINUTE=300
+          SOURCE_SCAN_MIN_INTERVAL_SECONDS=300
+          LOG_LEVEL=INFO
+          CLOUDFLARE_TUNNEL_TOKEN=
+          EOF
+      - name: Validate Pilot Compose topology and private service exposure
+        run: |
+          docker compose --env-file /tmp/zhituo-pilot.env -f deploy/pilot/docker-compose.yml config --quiet
+          rendered="$(docker compose --env-file /tmp/zhituo-pilot.env -f deploy/pilot/docker-compose.yml config)"
+          test "$(grep -c 'published:' <<<"$rendered")" = "1"
+          grep -q 'host_ip: 127.0.0.1' <<<"$rendered"
+          ! grep -Eq 'published: "?(3000|8000|5432|6379|9000|9001)"?' <<<"$rendered"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.0
+          terraform_wrapper: false
+      - name: Validate Oracle Free Tier Terraform
+        working-directory: infra/oracle-pilot
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+      - name: Verify all Pilot infrastructure images publish linux/arm64
+        run: |
+          for image in \
+            postgres:17-alpine \
+            redis:8-alpine \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z \
+            caddy:2.10.2-alpine \
+            cloudflare/cloudflared:2026.8.1 \
+            alpine:3.22.1; do
+            docker buildx imagetools inspect "$image" | grep -q 'linux/arm64'
+          done
+      - name: Build and import-smoke API on linux/arm64
+        run: |
+          docker buildx build --platform linux/arm64 --load -t zhituo-api:pilot-arm64 apps/api
+          docker run --rm --platform linux/arm64 --entrypoint python zhituo-api:pilot-arm64 \
+            -c "import app.main; print('pilot-api-arm64-ok')"
+      - name: Build Web on linux/arm64
+        run: >-
+          docker buildx build
+          --platform linux/arm64
+          --load
+          -f apps/web/Dockerfile
+          -t zhituo-web:pilot-arm64
+          .
+
   ci-gate:
     name: zhituo/ci-gate
     if: always()
-    needs: [web, api, e2e, containers, security]
+    needs: [web, api, e2e, containers, security, pilot]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate CI gate
@@ -384,9 +479,11 @@ jobs:
           E2E_RESULT: ${{ needs.e2e.result }}
           CONTAINERS_RESULT: ${{ needs.containers.result }}
           SECURITY_RESULT: ${{ needs.security.result }}
+          PILOT_RESULT: ${{ needs.pilot.result }}
         run: |
           test "$WEB_RESULT" = "success"
           test "$API_RESULT" = "success"
           test "$E2E_RESULT" = "success"
           test "$CONTAINERS_RESULT" = "success"
           test "$SECURITY_RESULT" = "success"
+          test "$PILOT_RESULT" = "success"

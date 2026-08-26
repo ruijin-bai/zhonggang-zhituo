@@ -1,0 +1,21 @@
+[Unit]
+Description=Zhituo Oracle Internal Pilot
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/zhituo/current/deploy/pilot/.env
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=zhituo
+Group=zhituo
+WorkingDirectory=/opt/zhituo/current
+Environment=ZHITUO_PILOT_ENV_FILE=/opt/zhituo/current/deploy/pilot/.env
+ExecStart=/opt/zhituo/current/scripts/pilot-up.sh --resume
+ExecStop=/opt/zhituo/current/scripts/pilot-down.sh
+TimeoutStartSec=900
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

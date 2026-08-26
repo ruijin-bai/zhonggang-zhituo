@@ -1,0 +1,346 @@
+name: zhituo-pilot
+
+x-api-environment: &api-environment
+  APP_ENV: production
+  DATA_BACKEND: database
+  DATABASE_URL: postgresql+psycopg://zhituo_runtime:${POSTGRES_RUNTIME_PASSWORD:?Set POSTGRES_RUNTIME_PASSWORD}@postgres:5432/zhituo
+  DATABASE_RLS_ENABLED: "true"
+  JOB_MODE: queue
+  REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379/0
+  DEMO_MODE: "false"
+  ALLOW_DEMO_FALLBACK: "false"
+  AUTH_MODE: trusted_proxy
+  AUTH_PROXY_SECRET: ${AUTH_PROXY_SECRET:?Set AUTH_PROXY_SECRET}
+  DOCUMENT_STORE_BACKEND: s3
+  DOCUMENT_STORE_S3_BUCKET: ${MINIO_BUCKET:-zhituo-pilot-documents}
+  DOCUMENT_STORE_S3_REGION: us-east-1
+  DOCUMENT_STORE_S3_ENDPOINT_URL: https://minio:9000
+  DOCUMENT_STORE_S3_FORCE_PATH_STYLE: "true"
+  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER}
+  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
+  AWS_CA_BUNDLE: /run/secrets/minio-ca.crt
+  METRICS_ENABLED: "true"
+  METRICS_TOKEN: ${METRICS_TOKEN:?Set METRICS_TOKEN}
+  AUTHENTICATED_RATE_LIMIT_PER_MINUTE: ${AUTHENTICATED_RATE_LIMIT_PER_MINUTE:-300}
+  SOURCE_SCAN_MIN_INTERVAL_SECONDS: ${SOURCE_SCAN_MIN_INTERVAL_SECONDS:-300}
+  CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-1}
+  AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+  AI_API_KEY: ${AI_API_KEY:-}
+  AI_MODEL_EXTRACTION: ${AI_MODEL_EXTRACTION:-}
+  AI_MODEL_ANALYSIS: ${AI_MODEL_ANALYSIS:-}
+  PURSUIT_EMAIL_DELIVERY_ENABLED: "false"
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+x-api-runtime: &api-runtime
+  image: ${ZHITUO_API_IMAGE:?Set ZHITUO_API_IMAGE}
+  environment: *api-environment
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:size=96m,mode=1777
+  volumes:
+    - ${PILOT_SECRETS_DIR:?Set PILOT_SECRETS_DIR}/minio/certs/public.crt:/run/secrets/minio-ca.crt:ro
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    - backend
+    - egress
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: zhituo
+      POSTGRES_USER: zhituo_owner
+      POSTGRES_PASSWORD: ${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhituo_owner -d zhituo"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+
+  redis:
+    image: redis:8-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --save
+      - "60"
+      - "1"
+      - --requirepass
+      - ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - backend
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+      - ${PILOT_SECRETS_DIR:?Set PILOT_SECRETS_DIR}/minio/certs:/root/.minio/certs:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--cacert", "/root/.minio/certs/public.crt", "https://127.0.0.1:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - backend
+
+  object-store-init:
+    <<: *api-runtime
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    command:
+      - python
+      - -c
+      - |
+        import os, time
+        import boto3
+        from botocore.exceptions import ClientError, EndpointConnectionError
+        bucket = os.environ["DOCUMENT_STORE_S3_BUCKET"]
+        client = boto3.client("s3", endpoint_url=os.environ["DOCUMENT_STORE_S3_ENDPOINT_URL"], region_name=os.environ["DOCUMENT_STORE_S3_REGION"])
+        for _ in range(60):
+            try:
+                client.head_bucket(Bucket=bucket)
+                print(f"bucket-ready:{bucket}")
+                break
+            except ClientError as exc:
+                if str(exc.response.get("Error", {}).get("Code", "")) in {"404", "NoSuchBucket", "NotFound"}:
+                    client.create_bucket(Bucket=bucket)
+                    print(f"bucket-created:{bucket}")
+                    break
+            except EndpointConnectionError:
+                pass
+            time.sleep(1)
+        else:
+            raise SystemExit("MinIO bucket did not become ready")
+
+  migrate:
+    <<: *api-runtime
+    restart: "no"
+    environment:
+      <<: *api-environment
+      DATABASE_URL: postgresql+psycopg://zhituo_owner:${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD}@postgres:5432/zhituo
+    depends_on:
+      postgres:
+        condition: service_healthy
+      object-store-init:
+        condition: service_completed_successfully
+    command: ["alembic", "upgrade", "head"]
+
+  database-roles:
+    image: postgres:17-alpine
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD}
+      POSTGRES_RUNTIME_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?Set POSTGRES_RUNTIME_PASSWORD}
+      POSTGRES_BACKUP_PASSWORD: ${POSTGRES_BACKUP_PASSWORD:?Set POSTGRES_BACKUP_PASSWORD}
+    volumes:
+      - ../../ops/postgres/provision_runtime_role.sql:/opt/zhituo/provision_runtime_role.sql:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command:
+      - sh
+      - -ec
+      - >-
+        psql -h postgres -U zhituo_owner -d zhituo
+        --set=database_name=zhituo
+        --set=runtime_role=zhituo_runtime
+        --set=runtime_password="$$POSTGRES_RUNTIME_PASSWORD"
+        --set=backup_role=zhituo_backup
+        --set=backup_password="$$POSTGRES_BACKUP_PASSWORD"
+        -f /opt/zhituo/provision_runtime_role.sql
+    networks:
+      - backend
+
+  bootstrap-identity:
+    <<: *api-runtime
+    restart: "no"
+    environment:
+      <<: *api-environment
+      DATABASE_URL: postgresql+psycopg://zhituo_owner:${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD}@postgres:5432/zhituo
+      PILOT_ADMIN_EMAIL: ${PILOT_ADMIN_EMAIL:?Set PILOT_ADMIN_EMAIL}
+      PILOT_ADMIN_DISPLAY_NAME: ${PILOT_ADMIN_DISPLAY_NAME:-Pilot Administrator}
+      PILOT_ORGANIZATION_NAME: ${PILOT_ORGANIZATION_NAME:-Zhituo Pilot}
+      PILOT_ORGANIZATION_CODE: ${PILOT_ORGANIZATION_CODE:-ZHITUO-PILOT}
+    depends_on:
+      database-roles:
+        condition: service_completed_successfully
+    command: ["zhituo-api", "bootstrap-pilot"]
+
+  real-source-pilot:
+    <<: *api-runtime
+    profiles: ["ops"]
+    restart: "no"
+    working_dir: /workspace
+    volumes:
+      - ${PILOT_SECRETS_DIR:?Set PILOT_SECRETS_DIR}/minio/certs/public.crt:/run/secrets/minio-ca.crt:ro
+      - ../..:/workspace
+    depends_on:
+      database-roles:
+        condition: service_completed_successfully
+    command:
+      - python
+      - scripts/run_persisted_real_source_pilot.py
+      - --market
+      - ${PILOT_REAL_SOURCE_MARKET:-Zambia}
+      - --rows
+      - ${PILOT_REAL_SOURCE_ROWS:-5}
+      - --require-market-country
+      - --reject-unknown-sector-drafts
+
+  api:
+    <<: *api-runtime
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      database-roles:
+        condition: service_completed_successfully
+      bootstrap-identity:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *api-runtime
+    command: ["celery", "-A", "app.celery_app.celery_app", "worker", "--loglevel=INFO", "--concurrency=${CELERY_WORKER_CONCURRENCY:-1}"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  beat:
+    <<: *api-runtime
+    command: ["celery", "-A", "app.celery_app.celery_app", "beat", "--loglevel=INFO", "--schedule=/var/lib/zhituo/celery/celerybeat-schedule"]
+    volumes:
+      - ${PILOT_SECRETS_DIR:?Set PILOT_SECRETS_DIR}/minio/certs/public.crt:/run/secrets/minio-ca.crt:ro
+      - beat-data:/var/lib/zhituo/celery
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    image: ${ZHITUO_WEB_IMAGE:?Set ZHITUO_WEB_IMAGE}
+    environment:
+      API_BASE_URL: http://api:8000
+      API_AUTH_MODE: trusted_proxy
+      API_TRUSTED_PROXY_SECRET: ${AUTH_PROXY_SECRET:?Set AUTH_PROXY_SECRET}
+      NEXT_PUBLIC_ALLOW_DEMO_FALLBACK: "false"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=96m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - backend
+      - frontend
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    environment:
+      PILOT_ADMIN_EMAIL: ${PILOT_ADMIN_EMAIL:?Set PILOT_ADMIN_EMAIL}
+      PILOT_BASIC_AUTH_USER: ${PILOT_BASIC_AUTH_USER:-pilot}
+      PILOT_BASIC_AUTH_HASH: ${PILOT_BASIC_AUTH_HASH:?Set PILOT_BASIC_AUTH_HASH}
+    ports:
+      - "${PILOT_BIND_ADDRESS:-127.0.0.1}:${PILOT_HTTP_PORT:-8080}:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      web:
+        condition: service_started
+    networks:
+      - frontend
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.8.1
+    profiles: ["cloudflare"]
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${CLOUDFLARE_TUNNEL_TOKEN:-not-configured}"]
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      caddy:
+        condition: service_started
+    networks:
+      - frontend
+      - egress
+
+volumes:
+  postgres-data:
+    name: zhituo-pilot-postgres
+  redis-data:
+    name: zhituo-pilot-redis
+  minio-data:
+    name: zhituo-pilot-minio
+  beat-data:
+    name: zhituo-pilot-beat
+  caddy-data:
+    name: zhituo-pilot-caddy-data
+  caddy-config:
+    name: zhituo-pilot-caddy-config
+
+networks:
+  backend:
+    name: zhituo-pilot-backend
+    internal: true
+  frontend:
+    name: zhituo-pilot-frontend
+  egress:
+    name: zhituo-pilot-egress

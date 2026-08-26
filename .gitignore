@@ -26,6 +26,15 @@ Thumbs.db
 # Runtime
 *.log
 
+# Oracle Pilot runtime, credentials, backups and local IaC state
+deploy/pilot/.env
+deploy/pilot/secrets/
+deploy/pilot/backups/
+infra/oracle-pilot/*.tfvars
+infra/oracle-pilot/.terraform/
+infra/oracle-pilot/terraform.tfstate*
+.firecrawl/
+
 # Gold evaluation runtime artifacts
 data/benchmark/source_cache/
 data/benchmark/source_provenance_report.json
