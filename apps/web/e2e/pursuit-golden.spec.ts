@@ -16,9 +16,11 @@ test("admin can create an assigned Pursuit Work Item through the real BFF", asyn
     .locator("form")
     .filter({ has: page.getByRole("button", { name: "创建 Work Item", exact: true }) });
 
-  await createForm.getByRole("textbox", { name: "工作项", exact: true }).fill(workItemTitle);
-  await createForm.getByLabel("负责人", { exact: true }).selectOption({ label: "智拓管理员 · admin" });
-  await createForm.getByLabel("优先级", { exact: true }).selectOption("high");
+  await createForm.locator('input[name="title"]').fill(workItemTitle);
+  await createForm
+    .locator('select[name="assignee_membership_id"]')
+    .selectOption({ label: "智拓管理员 · admin" });
+  await createForm.locator('select[name="priority"]').selectOption("high");
   await createForm.getByRole("button", { name: "创建 Work Item", exact: true }).click();
 
   await page.goto("/pursuit");
