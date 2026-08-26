@@ -112,3 +112,33 @@ python scripts/benchmark_report.py
 - 普通 CI 继续全绿。
 
 人工业务价值结论是第二层验收，必须等真实 reviewer 数据产生后再计算。
+
+## 6. 持久化生产主链路验证
+
+Stage 5 还必须验证真实来源不是旁路脚本，而是能进入正式业务数据链：
+
+`World Bank API → SourceSubscription → SourceFetch/SourceDocument → CandidateProcessing → OpportunityDraft`
+
+运行：
+
+```bash
+uv run --project apps/api python scripts/run_persisted_real_source_pilot.py \
+  --market Zambia \
+  --rows 5 \
+  --require-new-draft \
+  --require-market-country \
+  --reject-unknown-sector-drafts
+```
+
+输出：
+
+`data/pilot/latest_persisted_run.json`
+
+该 runner 使用正式 `scan_subscription()`、归档和 Candidate Processing 代码，并在真实 PostgreSQL 上记录表级计数。`Persisted Real Source Pilot` workflow 每周独立运行并保存 artifact。
+
+真实 Zambia 样本曾暴露两个生产问题，并已作为回归约束：
+
+1. 正式 Candidate Pipeline 必须保留 World Bank 的结构化 country metadata，文本识别不到 Zambia 时不得退回“待识别”；
+2. World Bank 咨询/非咨询服务公告若在 deterministic 模式下完全识别不出工程专业，不进入工程 Opportunity Draft，但铁路技术咨询、公路设计等明确工程专业咨询仍保留。
+
+因此，持久化 pilot 的“通过”表示真实来源可完整穿过生产主链路且基础候选边界有效；它仍然不等于人工效率、业务准确率或经营判断效果已经得到证明。
