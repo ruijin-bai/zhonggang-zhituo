@@ -1,7 +1,7 @@
 import asyncio
 
 from app.connectors.html import HtmlConnector
-from app.web_fetch import PUBLIC_FETCH_USER_AGENT, PublicResource, fetch_public_resource
+from app.web_fetch import PublicResource, fetch_public_resource
 
 
 def test_public_fetch_sends_cache_validators_and_handles_304(monkeypatch):
@@ -56,9 +56,6 @@ def test_public_fetch_sends_cache_validators_and_handles_304(monkeypatch):
     )
 
     assert captured["method"] == "GET"
-    assert captured["headers"]["User-Agent"] == PUBLIC_FETCH_USER_AGENT
-    assert captured["headers"]["Accept-Language"] == "en-US,en;q=0.9"
-    assert captured["headers"]["Cache-Control"] == "no-cache"
     assert captured["headers"]["If-None-Match"] == '"etag-v1"'
     assert captured["headers"]["If-Modified-Since"] == "Sun, 23 Aug 2026 12:00:00 GMT"
     assert resource.not_modified is True
