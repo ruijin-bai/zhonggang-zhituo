@@ -68,9 +68,15 @@ compose() {
 info "Validating staging Compose topology"
 compose config --quiet
 
-info "Building staging images from the current checkout"
-docker build -t "$ZHITUO_API_IMAGE" "$ROOT_DIR/apps/api"
-docker build -f "$ROOT_DIR/apps/web/Dockerfile" -t "$ZHITUO_WEB_IMAGE" "$ROOT_DIR"
+if [[ "${ZHITUO_STAGING_SKIP_BUILD:-false}" != "true" ]]; then
+  info "Building staging images from the current checkout"
+  docker build -t "$ZHITUO_API_IMAGE" "$ROOT_DIR/apps/api"
+  docker build -f "$ROOT_DIR/apps/web/Dockerfile" -t "$ZHITUO_WEB_IMAGE" "$ROOT_DIR"
+else
+  info "Reusing prebuilt staging images"
+  docker image inspect "$ZHITUO_API_IMAGE" >/dev/null
+  docker image inspect "$ZHITUO_WEB_IMAGE" >/dev/null
+fi
 
 info "Starting persistent infrastructure"
 compose up -d postgres redis minio mailpit
