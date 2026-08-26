@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 
 @dataclass(frozen=True)
@@ -17,13 +18,46 @@ def _pct(numerator: float, denominator: float) -> float:
     return round(numerator / denominator * 100, 1) if denominator else 0.0
 
 
-def calculate_benchmark(rows: list[dict]) -> BenchmarkMetrics:
-    """Aggregate paired manual-vs-Zhituo evaluation rows.
+def validate_benchmark_rows(rows: list[dict]) -> None:
+    """Reject malformed real-pilot rows before any business metric is calculated."""
+    seen: set[str] = set()
+    for index, row in enumerate(rows, start=1):
+        sample_id = str(row.get("sample_id") or "").strip()
+        if not sample_id:
+            raise ValueError(f"row {index}: sample_id is required")
+        if sample_id in seen:
+            raise ValueError(f"row {index}: duplicate sample_id {sample_id}")
+        seen.add(sample_id)
 
-    Required row keys:
-    manual_seconds, zhituo_seconds, fields_correct, fields_total,
-    evidence_traced, evidence_total, decision_match.
-    """
+        source_url = str(row.get("source_url") or "").strip()
+        parsed = urlparse(source_url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError(f"row {index}: source_url must be an absolute HTTPS URL")
+        if not str(row.get("reviewer") or "").strip():
+            raise ValueError(f"row {index}: reviewer is required")
+
+        try:
+            manual_seconds = float(row["manual_seconds"])
+            zhituo_seconds = float(row["zhituo_seconds"])
+            fields_correct = int(row["fields_correct"])
+            fields_total = int(row["fields_total"])
+            evidence_traced = int(row["evidence_traced"])
+            evidence_total = int(row["evidence_total"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"row {index}: benchmark numeric fields are invalid") from exc
+
+        if manual_seconds <= 0 or zhituo_seconds <= 0:
+            raise ValueError(f"row {index}: elapsed seconds must be positive")
+        if fields_total <= 0 or not 0 <= fields_correct <= fields_total:
+            raise ValueError(f"row {index}: fields_correct/fields_total is invalid")
+        if evidence_total <= 0 or not 0 <= evidence_traced <= evidence_total:
+            raise ValueError(f"row {index}: evidence_traced/evidence_total is invalid")
+        if not isinstance(row.get("decision_match"), bool):
+            raise ValueError(f"row {index}: decision_match must be boolean")
+
+
+def calculate_benchmark(rows: list[dict]) -> BenchmarkMetrics:
+    """Aggregate paired manual-vs-Zhituo evaluation rows."""
     if not rows:
         return BenchmarkMetrics(0, 0, 0, 0, 0, 0, 0, 0)
 
