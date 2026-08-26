@@ -269,6 +269,24 @@ async def process_candidate_document(
         metadata_country = str(document.connector_metadata.get("country") or "").strip()
         if discovery.country == "待识别" and metadata_country:
             discovery = discovery.model_copy(update={"country": metadata_country})
+        procurement_group = str(
+            document.connector_metadata.get("procurement_group") or ""
+        ).strip().upper()
+        if (
+            mode == "deterministic"
+            and discovery.sector == "待识别"
+            and procurement_group in {"CS", "NC"}
+        ):
+            discovery = discovery.model_copy(
+                update={
+                    "project_detected": False,
+                    "confidence": min(discovery.confidence, 0.45),
+                    "summary": (
+                        "结构化采购分类表明该公告属于咨询/非咨询服务，且当前文本未识别出工程专业；"
+                        "保留来源记录但不进入工程项目候选箱。"
+                    ),
+                }
+            )
 
         # Re-enter a short locked transaction after the expensive external/model call. A stale
         # worker that lost its lease is fenced out before it can create a candidate.

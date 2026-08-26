@@ -176,6 +176,10 @@ async def run(args) -> int:
             raise RuntimeError(
                 f"draft country did not preserve authoritative source market {source['market']!r}"
             )
+        if args.reject_unknown_sector_drafts and any(
+            item["sector"] == "待识别" for item in draft_snapshots
+        ):
+            raise RuntimeError("persisted pilot created a draft with unknown engineering sector")
 
         after = {
             "fetches": _count(session, SourceFetchRecord),
@@ -233,6 +237,7 @@ def main() -> None:
     parser.add_argument("--rows", type=int, default=5)
     parser.add_argument("--require-new-draft", action="store_true")
     parser.add_argument("--require-market-country", action="store_true")
+    parser.add_argument("--reject-unknown-sector-drafts", action="store_true")
     args = parser.parse_args()
     if args.rows < 1 or args.rows > 25:
         parser.error("--rows must be between 1 and 25")
