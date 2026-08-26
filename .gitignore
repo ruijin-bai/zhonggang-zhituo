@@ -31,3 +31,6 @@ data/benchmark/source_cache/
 data/benchmark/source_provenance_report.json
 data/benchmark/latest_evaluation.json
 data/benchmark/ci_evaluation.json
+
+# Real-source pilot runtime artifacts
+data/pilot/latest_run.json
