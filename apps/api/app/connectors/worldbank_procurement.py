@@ -107,7 +107,6 @@ def _notice_text(record: dict) -> tuple[str, str, str, datetime | None, dict]:
         ("Contact Organization", _first(record, "contact_organization", "organization_name", "borrower")),
         ("Contact Name", _first(record, "contact_name")),
         ("Contact Email", _first(record, "contact_email", "email")),
-        ("Contact Address", _first(record, "contact_address", "address")),
     ]
     text = "\n".join(f"{label}: {value}" for label, value in fields if value)
     published_at = _parse_datetime(_first(record, "publication_date", "published_date", "notice_date"))
@@ -127,6 +126,7 @@ def _notice_text(record: dict) -> tuple[str, str, str, datetime | None, dict]:
             "submission_date",
             "deadline_date",
         ),
+        "contact_address": _first(record, "contact_address", "address"),
     }
     return canonical_url, title, text, published_at, metadata
 
