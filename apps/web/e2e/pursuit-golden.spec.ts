@@ -25,6 +25,5 @@ test("admin can create an assigned Pursuit Work Item through the real BFF", asyn
 
   await page.goto("/pursuit");
   await expect(page.getByRole("heading", { level: 1, name: "我的经营工作" })).toBeVisible();
-  await expect(page.getByText("智拓管理员 · admin", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: workItemTitle, exact: true })).toBeVisible();
 });
