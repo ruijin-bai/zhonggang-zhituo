@@ -7,12 +7,52 @@ from .db import Base, OpportunityRecord, SessionLocal, engine
 from .pilot_bootstrap import ensure_pilot_identity
 from .seed import reset_demo_data, seed_demo_data
 
+# Business models are declared per feature module. SQLAlchemy only registers a table once its
+# module has been imported, so schema creation must import every module that owns a model —
+# otherwise create_all() silently builds a partial database.
+_MODEL_MODULES = (
+    "candidate_db",
+    "intelligence_db",
+    "opportunity_evidence_db",
+    "pursuit_db",
+    "pursuit_delivery_db",
+    "pursuit_reminder_db",
+    "source_db",
+)
+
+
+def _import_all_models() -> None:
+    import importlib
+
+    for module_name in _MODEL_MODULES:
+        importlib.import_module(f".{module_name}", package=__package__)
+
+
+def _stamp_alembic_head() -> None:
+    """Mark the ORM-created schema as current so a later `alembic upgrade` is not confused.
+
+    Only relevant for SQLite demo databases, which are built with create_all() instead of
+    migrations (SQLite cannot ALTER constraints). Never touches PostgreSQL, where migrations
+    remain the single source of truth.
+    """
+    try:
+        from alembic import command
+        from alembic.config import Config
+
+        ini_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "alembic.ini")
+        command.stamp(Config(ini_path), "head")
+    except Exception as error:  # pragma: no cover - best effort, never block startup
+        print(f"alembic stamp skipped: {error}")
+
 
 def init_db() -> None:
+    _import_all_models()
     Base.metadata.create_all(bind=engine)
+    if engine.dialect.name == "sqlite":
+        _stamp_alembic_head()
     with SessionLocal() as session:
         created = seed_demo_data(session)
-    print(f"database ready; seeded {created} demo opportunities")
+    print(f"database ready ({engine.dialect.name}); seeded {created} demo opportunities")
 
 
 def seed() -> None:

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { serverApiFetch } from "@/lib/server-api";
-import { DEMO_FALLBACK_ALLOWED, getDemoTrackingBoard } from "@/lib/demo-operating";
+import { DEMO_FALLBACK_ALLOWED, getDemoTrackingBoard, withDemoFlag } from "@/lib/demo-operating";
+import DemoDataBanner from "@/components/DemoDataBanner";
 
 async function getBoard() {
   try {
@@ -9,7 +10,7 @@ async function getBoard() {
     return await response.json();
   } catch (error) {
     if (!DEMO_FALLBACK_ALLOWED) throw error;
-    return getDemoTrackingBoard();
+    return withDemoFlag(getDemoTrackingBoard());
   }
 }
 
@@ -17,6 +18,7 @@ export default async function TrackingPage() {
   const board = await getBoard();
   return (
     <>
+      {board.isDemo ? <DemoDataBanner scope="重点项目跟踪台" /> : null}
       <header className="page-head">
         <div>
           <div className="eyebrow">重点经营项目</div>

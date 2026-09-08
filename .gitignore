@@ -25,6 +25,14 @@ Thumbs.db
 
 # Runtime
 *.log
+*.tsbuildinfo
+
+# Local demo database (dev-up.sh builds it from scratch; never commit binary DBs)
+data/*.db
+data/*.db-*
+
+# Pytest temp dir used when the system temp path is not writable
+.pytest_tmp/
 
 # Oracle Pilot runtime, credentials, backups and local IaC state
 deploy/pilot/.env
