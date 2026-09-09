@@ -117,7 +117,7 @@ export default async function PursuitMyWorkPage() {
                   {review.opportunity_id ? (
                     <div className={styles.formActions} style={{ marginTop: 10 }}>
                       <Link className={styles.linkButton} href={`/pursuit/opportunities/${encodeURIComponent(review.opportunity_id)}`}>
-                        进入 Workspace 复核
+                        进入工作区复核
                       </Link>
                     </div>
                   ) : null}

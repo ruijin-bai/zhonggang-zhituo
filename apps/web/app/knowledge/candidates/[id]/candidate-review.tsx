@@ -59,7 +59,7 @@ export default function CandidateReview({ candidate, canReview }: Props) {
         router.push(`/knowledge/opportunities/${encodeURIComponent(payload.opportunity.id)}`);
         return;
       }
-      setMessage("Candidate 已确认入池。");
+      setMessage("候选商机已确认入池。");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "确认失败");
@@ -112,7 +112,7 @@ export default function CandidateReview({ candidate, canReview }: Props) {
     return (
       <section className={styles.knowledgeSection}>
         <div className={styles.sectionTitle}><h2>人工复核</h2><span className={styles.typeBadge}>{candidate.status}</span></div>
-        <div className={styles.empty}>该 Candidate 已完成审核，当前不再允许重复处理。</div>
+        <div className={styles.empty}>该候选商机已完成审核，当前不再允许重复处理。</div>
       </section>
     );
   }
@@ -150,7 +150,7 @@ export default function CandidateReview({ candidate, canReview }: Props) {
             onClick={reject}
             style={{ minHeight: 40, border: "1px solid #b24b4b", borderRadius: 7, padding: "0 16px", background: "#fff", color: "#8a3030", fontWeight: 700, cursor: "pointer" }}
           >
-            {busy === "reject" ? "正在拒绝…" : "拒绝 Candidate"}
+            {busy === "reject" ? "正在拒绝…" : "拒绝候选商机"}
           </button>
         </div>
       </form>

@@ -47,7 +47,7 @@ export default async function PursuitWorkspacePage({ params }: { params: Promise
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">Pursuit Orchestration · Opportunity Execution</div>
+          <div className="eyebrow">经营协同 · 机会执行</div>
           <h1>{opportunity.title}</h1>
           <div className="muted">{opportunity.country} · {opportunity.sector} · {opportunity.stage}</div>
         </div>
@@ -76,11 +76,11 @@ export default async function PursuitWorkspacePage({ params }: { params: Promise
               </div>
               <div className={styles.badges}>
                 <span className={styles.priority}>{workspace.priority}</span>
-                <span className={styles.status}>Lead · {workspace.lead?.display_name ?? "未指定"}</span>
+                <span className={styles.status}>牵头人 · {workspace.lead?.display_name ?? "未指定"}</span>
               </div>
             </div>
             <div className={styles.meta} style={{ marginTop: 12 }}>
-              Workspace {workspace.id} · 下次复盘 {dateLabel(workspace.next_review_at)} · 当前角色 {session.role}
+              工作区 {workspace.id} · 下次复盘 {dateLabel(workspace.next_review_at)} · 当前角色 {session.role}
             </div>
           </section>
 

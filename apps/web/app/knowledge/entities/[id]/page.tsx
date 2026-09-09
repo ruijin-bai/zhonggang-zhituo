@@ -27,7 +27,7 @@ export default async function EntityDetailPage({ params }: { params: Promise<{ i
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">Entity 360°</div>
+          <div className="eyebrow">经营主体 360°</div>
           <h1>{entity.canonical_name}</h1>
           <div className="muted">{entity.country || "国别待核实"} · {roles.join(" / ") || "角色待积累"}</div>
         </div>
@@ -67,7 +67,7 @@ export default async function EntityDetailPage({ params }: { params: Promise<{ i
         </section>
 
         <section className={styles.knowledgeSection}>
-          <div className={styles.sectionTitle}><h2>经营认知边界</h2><span className={styles.meta}>Evidence-first</span></div>
+          <div className={styles.sectionTitle}><h2>经营认知边界</h2><span className={styles.meta}>证据优先</span></div>
           <p className={styles.snippet}>
             自动归一只使用规范名/已知别名与国别兼容性；同名跨国不会自动合并。这里展示的是已由来源和正式 Opportunity 关系支撑的组织身份，不推断无证据客户关系或关键人态度。
           </p>

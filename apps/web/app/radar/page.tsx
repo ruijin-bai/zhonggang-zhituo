@@ -16,7 +16,7 @@ export default async function RadarPage() {
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">Market Radar · Where to Play</div>
+          <div className="eyebrow">市场雷达 · 何处布局</div>
           <h1>市场雷达</h1>
           <div className="muted">把分散商机转成国别与专业维度的经营资源配置判断。</div>
         </div>

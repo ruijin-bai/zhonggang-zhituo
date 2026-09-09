@@ -64,7 +64,7 @@ export default async function TeamWorkPage() {
           ))}
         </div>
       ) : (
-        <div className={styles.empty}>当前还没有 Active Pursuit Workspace。manager 可从正式 Opportunity 开启经营协同。</div>
+        <div className={styles.empty}>当前还没有在研经营工作区。manager 可从正式机会开启经营协同。</div>
       )}
     </>
   );

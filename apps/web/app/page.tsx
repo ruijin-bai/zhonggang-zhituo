@@ -134,7 +134,7 @@ export default async function DashboardPage() {
         <Link href={focus ? `/strategy?id=${encodeURIComponent(focus.id)}` : "/opportunities"}>
           <span>03</span>
           <div>
-            <div className="eyebrow">HOW TO WIN</div>
+            <div className="eyebrow">赢标之道</div>
             <h2>怎么拿</h2>
             <p>针对重点机会形成赢标主张、红队挑战、资源缺口和下一轮可执行经营行动。</p>
           </div>

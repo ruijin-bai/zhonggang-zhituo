@@ -91,7 +91,7 @@ export default function PursuitReminderInbox({ data, canAcknowledge }: Props) {
         <span className={styles.meta}>{data.count} 条 active / acknowledged</span>
       </div>
       <p className={styles.note}>
-        Reminder 由截止时间、持续阻塞、Gate 与 Review 状态自动生成。已知悉不等于问题已解决；条件解除后系统才会自动关闭提醒。
+        提醒由截止时间、持续阻塞、门禁与复核状态自动生成。已知悉不等于问题已解决；条件解除后系统才会自动关闭提醒。
       </p>
       {error ? <div className={styles.error} style={{ marginBottom: 10 }}>{error}</div> : null}
       {data.items.length ? (

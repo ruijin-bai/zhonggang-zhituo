@@ -23,7 +23,7 @@ export default async function PursuitPortfolioPage() {
         <div>
           <div className="eyebrow">经营协同 · 经营组合</div>
           <h1>经营组合</h1>
-          <div className="muted">把机会研判、协同负荷、Blocker 和最新 Decision Gate 放在同一管理视图，支持资源聚焦与经营会议。</div>
+          <div className="muted">把机会研判、协同负荷、阻塞项和最新决策门禁放在同一管理视图，支持资源聚焦与经营会议。</div>
         </div>
       </header>
       <PursuitNav />
@@ -47,7 +47,7 @@ export default async function PursuitPortfolioPage() {
                   <th>研判</th>
                   <th>工作区</th>
                   <th>工作负荷</th>
-                  <th>最新 Gate</th>
+                  <th>最新门禁</th>
                 </tr>
               </thead>
               <tbody>
@@ -86,7 +86,7 @@ export default async function PursuitPortfolioPage() {
               </tbody>
             </table>
           </div>
-        ) : <div className={styles.empty}>当前还没有 Pursuit Workspace。</div>}
+        ) : <div className={styles.empty}>当前还没有经营工作区。</div>}
       </section>
     </>
   );

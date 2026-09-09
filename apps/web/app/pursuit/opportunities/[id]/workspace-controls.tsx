@@ -4,6 +4,7 @@ import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { PursuitGate, PursuitMember, PursuitWorkItem, PursuitWorkspace } from "@/lib/pursuit";
+import { DECISION_LABEL, GATE_TYPE_LABEL, PRIORITY_LABEL, REVIEW_STATUS_LABEL, ROLE_LABEL, STATUS_LABEL, WORK_TYPE_LABEL } from "@/lib/labels";
 import styles from "../../pursuit.module.css";
 
 type MutationAction =
@@ -137,7 +138,7 @@ export function OpenWorkspaceControl({ opportunityId, canManage }: { opportunity
       <p className={styles.note}>显式开启后，项目才进入团队执行体系。系统不会因为浏览 Opportunity 自动创建协同状态。</p>
       <form className={styles.form} onSubmit={submit}>
         <div className={styles.formGrid2}>
-          <label className={styles.field}><span>经营优先级</span><select name="priority" defaultValue="high"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+          <label className={styles.field}><span>经营优先级</span><select name="priority" defaultValue="high"><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select></label>
           <label className={styles.field}><span>下次复盘</span><input name="next_review_at" type="datetime-local" /></label>
         </div>
         <label className={styles.field}><span>立项理由 / 经营目标</span><textarea name="rationale" rows={4} placeholder="为什么现在值得投入团队资源？当前最需要验证什么？" /></label>
@@ -169,7 +170,7 @@ function ParticipantForm({ workspace, members, busy, mutate }: { workspace: Purs
     <form className={styles.form} onSubmit={submit}>
       <div className={styles.formGrid2}>
         <label className={styles.field}><span>成员</span><select name="membership_id" required defaultValue=""><option value="" disabled>选择组织成员</option>{members.map((member) => <option value={member.membership_id} key={member.membership_id}>{memberLabel(member)}</option>)}</select></label>
-        <label className={styles.field}><span>角色</span><select name="participant_role" defaultValue="contributor"><option value="lead">Lead</option><option value="contributor">Contributor</option><option value="reviewer">Reviewer</option><option value="watcher">Watcher</option></select></label>
+        <label className={styles.field}><span>角色</span><select name="participant_role" defaultValue="contributor"><option value="lead">牵头人</option><option value="contributor">贡献者</option><option value="reviewer">复核人</option><option value="watcher">观察者</option></select></label>
       </div>
       <label className={styles.field}><span>职责</span><input name="responsibility" placeholder="如：融资路径核实、技术方案牵头" /></label>
       <button className={styles.secondaryButton} type="submit" disabled={busy !== null}>添加 / 更新参与人</button>
@@ -207,7 +208,7 @@ function CreateWorkItemForm({ workspace, members, busy, mutate }: { workspace: P
       <label className={styles.field}><span>工作项</span><input name="title" minLength={2} required placeholder="必须形成一个可验证的交付结果" /></label>
       <label className={styles.field}><span>说明</span><textarea name="description" rows={3} placeholder="完成定义、依赖事实或交付要求" /></label>
       <div className={styles.formGrid2}>
-        <label className={styles.field}><span>类型</span><select name="work_type" defaultValue="action"><option value="action">Action</option><option value="milestone">Milestone</option><option value="request">Request</option></select></label>
+        <label className={styles.field}><span>类型</span><select name="work_type" defaultValue="action"><option value="action">行动</option><option value="milestone">里程碑</option><option value="request">请求</option></select></label>
         <label className={styles.field}><span>负责人</span><select name="assignee_membership_id" defaultValue=""><option value="">暂不指派</option>{members.map((member) => <option value={member.membership_id} key={member.membership_id}>{memberLabel(member)}</option>)}</select></label>
         <label className={styles.field}><span>优先级</span><select name="priority" defaultValue="high"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
         <label className={styles.field}><span>截止时间</span><input name="due_at" type="datetime-local" /></label>
@@ -260,9 +261,9 @@ function WorkItemEditor({ item, workspace, members, busy, mutate }: { item: Purs
         <label className={styles.field}><span>截止时间</span><input name="due_at" type="datetime-local" defaultValue={localDateTime(item.due_at)} /></label>
       </div>
       <label className={styles.field}><span>依赖</span><select name="dependency_work_item_id" defaultValue={item.dependency_work_item_id ?? ""}><option value="">无依赖</option>{dependencies.map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.title}</option>)}</select></label>
-      <label className={styles.field}><span>Blocked 原因</span><input name="blocked_reason" defaultValue={item.blocked_reason ?? ""} placeholder="只有标记 Blocked 时必填" /></label>
-      {item.legacy_owner_text && !item.assignee ? <div className={styles.meta}>历史负责人文本：{item.legacy_owner_text}（尚未映射为真实 Membership）</div> : null}
-      <button className={styles.secondaryButton} type="submit" disabled={busy !== null}>保存 Work Item</button>
+      <label className={styles.field}><span>阻塞原因</span><input name="blocked_reason" defaultValue={item.blocked_reason ?? ""} placeholder="只有标记阻塞时必填" /></label>
+      {item.legacy_owner_text && !item.assignee ? <div className={styles.meta}>历史负责人文本：{item.legacy_owner_text}（尚未映射为真实成员）</div> : null}
+      <button className={styles.secondaryButton} type="submit" disabled={busy !== null}>保存工作项</button>
     </form>
   );
 }
@@ -289,14 +290,14 @@ function GateControls({ gate, members, currentMembershipId, canEdit, canManage, 
   return (
     <article className={styles.card}>
       <div className={styles.cardTop}>
-        <div><strong>{gate.title}</strong><div className={styles.meta}>{gate.gate_type} · {gate.status}</div></div>
-        {latest ? <span className={`${styles.badge} ${decisionClass(latest.decision)}`}>{latest.decision}</span> : <span className={styles.status}>待决策</span>}
+        <div><strong>{gate.title}</strong><div className={styles.meta}>{GATE_TYPE_LABEL[gate.gate_type] ?? gate.gate_type} · {STATUS_LABEL[gate.status] ?? gate.status}</div></div>
+        {latest ? <span className={`${styles.badge} ${decisionClass(latest.decision)}`}>{DECISION_LABEL[latest.decision] ?? latest.decision}</span> : <span className={styles.status}>待决策</span>}
       </div>
       {gate.reviews.length ? <div className={styles.list} style={{ marginTop: 12 }}>{gate.reviews.map((review) => {
         const allowed = canEdit && (canManage || review.reviewer?.membership_id === currentMembershipId);
         return <div className={styles.card} key={review.id}><div className={styles.cardTop}><strong>{review.reviewer?.display_name ?? "未知 Reviewer"}</strong><span className={styles.status}>{review.status}</span></div><div className={styles.meta}>{review.note || "尚无复核意见"}</div>{allowed ? <form className={styles.form} style={{ marginTop: 8 }} onSubmit={(event) => submitReview(event, review.id)}><div className={styles.formGrid2}><label className={styles.field}><span>Review 结果</span><select name="status" defaultValue={review.status === "pending" ? "approved" : review.status}><option value="approved">Approved</option><option value="changes_requested">Changes Requested</option><option value="waived">Waived</option></select></label><label className={styles.field}><span>意见</span><input name="note" defaultValue={review.note} /></label></div><button className={styles.secondaryButton} disabled={busy !== null}>提交 Review</button></form> : null}</div>;
       })}</div> : <div className={styles.meta} style={{ marginTop: 10 }}>尚未请求 Reviewer。</div>}
-      {canManage ? <><form className={styles.form} style={{ marginTop: 12 }} onSubmit={requestReview}><div className={styles.formGrid2}><label className={styles.field}><span>新增 Reviewer</span><select name="reviewer_membership_id" required defaultValue=""><option value="" disabled>选择 Reviewer</option>{members.map((member) => <option value={member.membership_id} key={member.membership_id}>{memberLabel(member)}</option>)}</select></label><div className={styles.formActions} style={{ alignItems: "end" }}><button className={styles.secondaryButton} disabled={busy !== null}>请求 Review</button></div></div></form><form className={styles.form} style={{ marginTop: 12 }} onSubmit={decide}><div className={styles.formGrid2}><label className={styles.field}><span>Decision</span><select name="decision" defaultValue="HOLD"><option value="GO">GO</option><option value="HOLD">HOLD</option><option value="NO_GO">NO-GO</option></select></label><label className={styles.field}><span>决策理由</span><input name="rationale" minLength={2} required placeholder="基于哪些事实继续、暂停或退出？" /></label></div><button className={styles.primaryButton} disabled={busy !== null}>记录 Decision</button></form></> : null}
+      {canManage ? <><form className={styles.form} style={{ marginTop: 12 }} onSubmit={requestReview}><div className={styles.formGrid2}><label className={styles.field}><span>新增复核人</span><select name="reviewer_membership_id" required defaultValue=""><option value="" disabled>选择复核人</option>{members.map((member) => <option value={member.membership_id} key={member.membership_id}>{memberLabel(member)}</option>)}</select></label><div className={styles.formActions} style={{ alignItems: "end" }}><button className={styles.secondaryButton} disabled={busy !== null}>请求复核</button></div></div></form><form className={styles.form} style={{ marginTop: 12 }} onSubmit={decide}><div className={styles.formGrid2}><label className={styles.field}><span>决策</span><select name="decision" defaultValue="HOLD"><option value="GO">放行</option><option value="HOLD">暂缓</option><option value="NO_GO">否决</option></select></label><label className={styles.field}><span>决策理由</span><input name="rationale" minLength={2} required placeholder="基于哪些事实继续、暂停或退出？" /></label></div><button className={styles.primaryButton} disabled={busy !== null}>记录决策</button></form></> : null}
       {gate.decisions.length ? <div className={styles.timeline} style={{ marginTop: 14 }}>{gate.decisions.map((decision) => <div className={styles.timelineItem} key={decision.id}><strong className={decisionClass(decision.decision)} style={{ padding: "2px 7px", borderRadius: 999 }}>{decision.decision}</strong><div className={styles.note}>{decision.rationale}</div><div className={styles.meta}>{decision.decided_by?.display_name ?? "未知决策人"} · {new Date(decision.decided_at).toLocaleString("zh-CN", { hour12: false })}{decision.supersedes_decision_id ? ` · supersedes ${decision.supersedes_decision_id}` : ""}</div></div>)}</div> : null}
     </article>
   );
@@ -322,7 +323,7 @@ export function WorkspaceControls({ workspace, members, currentMembershipId, can
       <div className={styles.split}>
         <div style={{ display: "grid", gap: 18 }}>
           <section className={styles.section}>
-            <div className={styles.sectionHead}><h2>Work Items</h2><span className={styles.meta}>{workspace.work_items.length} 项</span></div>
+            <div className={styles.sectionHead}><h2>工作项</h2><span className={styles.meta}>{workspace.work_items.length} 项</span></div>
             {canEdit ? <CreateWorkItemForm workspace={workspace} members={members} busy={busy} mutate={mutate} /> : null}
             <div className={styles.list} style={{ marginTop: canEdit ? 18 : 0 }}>
               {workspace.work_items.length ? workspace.work_items.map((item) => <div className={styles.card} key={item.id}>{canEdit ? <WorkItemEditor item={item} workspace={workspace} members={members} busy={busy} mutate={mutate} /> : <><div className={styles.cardTop}><strong>{item.title}</strong><span className={`${styles.status} ${statusClass(item.status)}`}>{item.status}</span></div><div className={styles.note}>{item.description}</div><div className={styles.meta}>{item.assignee?.display_name ?? item.legacy_owner_text ?? "未指派"} · {item.priority}</div>{item.blocked_reason ? <div className={styles.error} style={{ marginTop: 8 }}>Blocked：{item.blocked_reason}</div> : null}</>}</div>) : <div className={styles.empty}>暂无 Work Item。</div>}
