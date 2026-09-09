@@ -36,8 +36,9 @@ def _stamp_alembic_head() -> None:
     remain the single source of truth.
     """
     try:
-        from alembic import command
         from alembic.config import Config
+
+        from alembic import command
 
         ini_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "alembic.ini")
         command.stamp(Config(ini_path), "head")
