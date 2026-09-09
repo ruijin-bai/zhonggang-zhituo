@@ -45,7 +45,7 @@ export default async function DashboardPage() {
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">SYSTEM OF INTELLIGENCE · OVERSEAS ENGINEERING</div>
+          <div className="eyebrow">SYSTEM OF INTELLIGENCE · 海外工程经营</div>
           <h1>中港智拓 · 海外工程经营智能中枢</h1>
           <div className="muted">持续感知市场、识别机会、汇聚证据、辅助判断并推动经营行动，把分散信息转化为组织可复用的经营能力。</div>
         </div>
@@ -55,7 +55,7 @@ export default async function DashboardPage() {
       <section className="section" style={{ marginBottom: 18 }}>
         <div className="section-head">
           <div>
-            <div className="eyebrow">DAILY OPERATING BRIEF</div>
+            <div className="eyebrow">今日经营晨报</div>
             <h2 style={{ marginBottom: 4 }}>今天发生什么 · 我需要处理什么</h2>
             <div className="muted small">过去 {brief?.window_hours ?? 24} 小时的经营变化与当前待处理事项</div>
           </div>
@@ -143,15 +143,15 @@ export default async function DashboardPage() {
 
       <section className="cockpit-strip">
         <Link href="/radar"><span>市场覆盖</span><strong>{radar.country_count}</strong><small>个国别/区域进入雷达</small></Link>
-        <Link href="/knowledge"><span>待审 Candidate</span><strong>{brief?.summary.pending_candidates ?? radar.pending_draft_count}</strong><small>人工确认后才进入正式机会</small></Link>
+        <Link href="/knowledge"><span>待审候选商机</span><strong>{brief?.summary.pending_candidates ?? radar.pending_draft_count}</strong><small>人工确认后才进入正式机会</small></Link>
         <Link href="/opportunities"><span>正式机会</span><strong>{opportunities.length}</strong><small>其中 A 级 {aCount} 个</small></Link>
-        <Link href="/knowledge"><span>证据沉淀</span><strong>{radar.evidence_count}</strong><small>结构化 Evidence</small></Link>
+        <Link href="/knowledge"><span>证据沉淀</span><strong>{radar.evidence_count}</strong><small>已绑定项目的结构化证据</small></Link>
         <Link href="/pursuit"><span>高置信研判</span><strong>{highConfidence}</strong><small>进入协同后落实责任</small></Link>
       </section>
 
       <div className="grid-2 cockpit-main">
         <section className="section hero-opportunity">
-          <div className="eyebrow">PRIORITY OPPORTUNITY · WHAT TO PURSUE</div>
+          <div className="eyebrow">重点机会 · 重点经营</div>
           {focus ? (
             <>
               <h2>{focus.title}</h2>
@@ -174,7 +174,7 @@ export default async function DashboardPage() {
           ) : (
             <div className="empty-state" style={{ minHeight: 220 }}>
               <h2>当前暂无正式 Opportunity</h2>
-              <p>先处理待审 Candidate；系统不会在未经人工确认和证据校验的情况下自动生成正式经营机会。</p>
+              <p>先处理待审候选商机；系统不会在未经人工确认和证据校验的情况下自动生成正式经营机会。</p>
               <div className="flow-links"><Link href="/knowledge">进入 Candidate Inbox →</Link></div>
             </div>
           )}
