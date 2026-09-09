@@ -157,7 +157,7 @@ export default async function KnowledgePage({ searchParams }: PageProps) {
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">Market Intelligence Workbench</div>
+          <div className="eyebrow">经营情报工作台</div>
           <h1>经营情报工作台</h1>
           <div className="muted">统一查项目、业主、融资方、证据与来源，并把待审候选放到同一个经营入口。</div>
         </div>

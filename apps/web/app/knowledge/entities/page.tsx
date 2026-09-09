@@ -20,7 +20,7 @@ export default async function EntityIndexPage({ searchParams }: PageProps) {
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">Enterprise Knowledge · Entities</div>
+          <div className="eyebrow">企业知识 · 经营主体</div>
           <h1>经营主体</h1>
           <div className="muted">查看业主、融资方、竞争对手和合作伙伴在正式经营机会中的历史出现与角色。</div>
         </div>

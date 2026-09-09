@@ -16,7 +16,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   return (
     <>
       <header className="page-head">
-        <div><div className="eyebrow">Opportunity Intelligence</div><h1>{item.title}</h1><div className="muted">{item.country} · {item.sector} · {item.stage}</div></div>
+        <div><div className="eyebrow">机会研判情报</div><h1>{item.title}</h1><div className="muted">{item.country} · {item.sector} · {item.stage}</div></div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span className={`badge badge-${item.grade.toLowerCase()}`}>{item.grade} 级</span>
           <Link className="primary-button" href={`/knowledge/opportunities/${encodeURIComponent(item.id)}`}>360°知识视图</Link>
@@ -33,7 +33,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
       <div className="detail-grid">
         <div className="stack">
-          <section className="section"><h2>经营判断</h2><p>{item.pursuit_thesis}</p><div className="eyebrow" style={{ marginTop: 18 }}>Next Actions</div><ol className="action-list">{item.next_actions.map((x) => <li key={x}>{x}</li>)}</ol></section>
+          <section className="section"><h2>经营判断</h2><p>{item.pursuit_thesis}</p><div className="eyebrow" style={{ marginTop: 18 }}>下一步行动</div><ol className="action-list">{item.next_actions.map((x) => <li key={x}>{x}</li>)}</ol></section>
           <section className="section"><h2>100 分评分拆解</h2><div className="score-list">{scoreMeta.map(([key, label, max]) => { const value = item.breakdown[key]; return <div className="score-row" key={key}><div><div>{label}<span className="muted"> / {max}</span></div><div className="bar"><span style={{ width: `${Math.min(100, value / max * 100)}%` }} /></div></div><strong>{value}</strong></div>; })}</div></section>
           <section className="section"><h2>证据链</h2>{item.evidence.length ? item.evidence.map((ev) => <div className="evidence" key={ev.id}><div><span className="source-rank">{ev.rank}级来源</span><strong>{ev.title}</strong></div><div className="muted" style={{ fontSize: 12, margin: "5px 0" }}>{ev.publisher} · {ev.published_at}</div><div>{ev.fact}</div></div>) : <div className="muted">暂无已绑定证据。</div>}</section>
         </div>

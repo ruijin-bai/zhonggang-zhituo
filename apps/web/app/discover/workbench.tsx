@@ -93,7 +93,7 @@ export default function DiscoveryWorkbench() {
           {result && <div className="stack">
             <div className="flow"><strong>{result.mode === "ai" ? "AI Structured Output" : "确定性识别"}</strong> → 草稿 → 去重 → 人工确认</div>
             <div className="card" style={{ padding: 16 }}>
-              <div className="eyebrow">{Math.round(result.draft.discovery.confidence * 100)}% DISCOVERY CONFIDENCE</div>
+              <div className="eyebrow">{Math.round(result.draft.discovery.confidence * 100)}% 候选置信度</div>
               <h2 style={{ marginTop: 8 }}>{result.draft.discovery.title}</h2>
               <div className="muted">{result.draft.discovery.country} · {result.draft.discovery.region} · {result.draft.discovery.sector}</div>
               <p>{result.draft.discovery.summary}</p>
@@ -113,7 +113,7 @@ export default function DiscoveryWorkbench() {
 
         {result?.draft.discovery.facts.length ? <section className="section"><h2>来源事实</h2>{result.draft.discovery.facts.map((fact) => <div className="evidence" key={`${fact.field_name}-${fact.value}`}><div><span className="source-rank">{Math.round(fact.confidence * 100)}%</span><strong>{fact.field_name}</strong></div><div style={{ marginTop: 6 }}>{fact.value}{fact.score_hint !== null ? ` · 评分映射 ${fact.score_hint}` : ""}</div><div className="muted quote" style={{ marginTop: 6 }}>“{fact.evidence_quote}”</div></div>)}</section> : null}
 
-        {confirmed && <section className="section hero-opportunity"><div className="eyebrow">Confirmed Opportunity</div><h2 style={{ marginTop: 8 }}>{confirmed.opportunity.title}</h2><div className="hero-score"><div className="score-big">{confirmed.opportunity.score}</div><div><span className={`badge badge-${confirmed.opportunity.grade.toLowerCase()}`}>{confirmed.opportunity.grade} 级</span><div className="muted" style={{ marginTop: 8 }}>{confirmed.opportunity.decision} · 置信度 {confirmed.opportunity.confidence}%</div></div></div><p>{confirmed.note}</p><Link href={`/opportunities/${confirmed.opportunity.id}`}><strong>进入项目详情 →</strong></Link></section>}
+        {confirmed && <section className="section hero-opportunity"><div className="eyebrow">已确认机会</div><h2 style={{ marginTop: 8 }}>{confirmed.opportunity.title}</h2><div className="hero-score"><div className="score-big">{confirmed.opportunity.score}</div><div><span className={`badge badge-${confirmed.opportunity.grade.toLowerCase()}`}>{confirmed.opportunity.grade} 级</span><div className="muted" style={{ marginTop: 8 }}>{confirmed.opportunity.decision} · 置信度 {confirmed.opportunity.confidence}%</div></div></div><p>{confirmed.note}</p><Link href={`/opportunities/${confirmed.opportunity.id}`}><strong>进入项目详情 →</strong></Link></section>}
       </div>
     </div>
   );

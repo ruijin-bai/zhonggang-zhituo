@@ -25,6 +25,25 @@ Thumbs.db
 
 # Runtime
 *.log
+*.tsbuildinfo
+outputs_wb/
+.workbuddy/
+
+# Local demo database (dev-up.sh builds it from scratch; never commit binary DBs)
+data/*.db
+data/*.db-*
+
+# Pytest temp dir used when the system temp path is not writable
+.pytest_tmp/
+
+# Oracle Pilot runtime, credentials, backups and local IaC state
+deploy/pilot/.env
+deploy/pilot/secrets/
+deploy/pilot/backups/
+infra/oracle-pilot/*.tfvars
+infra/oracle-pilot/.terraform/
+infra/oracle-pilot/terraform.tfstate*
+.firecrawl/
 
 # Gold evaluation runtime artifacts
 data/benchmark/source_cache/

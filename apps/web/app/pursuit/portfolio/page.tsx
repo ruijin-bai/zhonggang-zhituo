@@ -21,17 +21,17 @@ export default async function PursuitPortfolioPage() {
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">Pursuit Orchestration · Portfolio</div>
+          <div className="eyebrow">经营协同 · 经营组合</div>
           <h1>经营组合</h1>
-          <div className="muted">把机会研判、协同负荷、Blocker 和最新 Decision Gate 放在同一管理视图，支持资源聚焦与经营会议。</div>
+          <div className="muted">把机会研判、协同负荷、阻塞项和最新决策门禁放在同一管理视图，支持资源聚焦与经营会议。</div>
         </div>
       </header>
       <PursuitNav />
 
       <section className={styles.metrics}>
-        <div className={styles.metric}><span>Pursuit Workspaces</span><strong>{data.count}</strong></div>
-        <div className={styles.metric}><span>未结 Work Items</span><strong>{activeWork}</strong></div>
-        <div className={styles.metric}><span>Blocked Items</span><strong>{blocked}</strong></div>
+        <div className={styles.metric}><span>在研经营工作区</span><strong>{data.count}</strong></div>
+        <div className={styles.metric}><span>未结工作项</span><strong>{activeWork}</strong></div>
+        <div className={styles.metric}><span>已阻塞项</span><strong>{blocked}</strong></div>
         <div className={styles.metric}><span>已有 Gate Decision</span><strong>{decided}</strong></div>
       </section>
 
@@ -42,12 +42,12 @@ export default async function PursuitPortfolioPage() {
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Opportunity</th>
+                  <th>机会</th>
                   <th>市场</th>
                   <th>研判</th>
-                  <th>Workspace</th>
+                  <th>工作区</th>
                   <th>工作负荷</th>
-                  <th>最新 Gate</th>
+                  <th>最新门禁</th>
                 </tr>
               </thead>
               <tbody>
@@ -67,7 +67,7 @@ export default async function PursuitPortfolioPage() {
                     <td><span className={styles.priority}>{item.priority}</span><div className={styles.meta}>{item.workspace_status}</div></td>
                     <td>
                       未结 {item.open_work_items}
-                      <div className={item.blocked_work_items ? `${styles.meta} ${styles.blocked}` : styles.meta}>Blocked {item.blocked_work_items}</div>
+                      <div className={item.blocked_work_items ? `${styles.meta} ${styles.blocked}` : styles.meta}>已阻塞 {item.blocked_work_items}</div>
                     </td>
                     <td>
                       {item.gate ? (
@@ -86,7 +86,7 @@ export default async function PursuitPortfolioPage() {
               </tbody>
             </table>
           </div>
-        ) : <div className={styles.empty}>当前还没有 Pursuit Workspace。</div>}
+        ) : <div className={styles.empty}>当前还没有经营工作区。</div>}
       </section>
     </>
   );

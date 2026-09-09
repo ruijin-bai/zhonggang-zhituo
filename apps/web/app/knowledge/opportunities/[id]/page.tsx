@@ -32,7 +32,7 @@ export default async function OpportunityKnowledgePage({ params }: { params: Pro
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">Opportunity 360° Knowledge View</div>
+          <div className="eyebrow">机会 360° 知识视图</div>
           <h1>{opportunity.title}</h1>
           <div className="muted">
             {opportunity.country} · {opportunity.region} · {opportunity.sector} · {opportunity.stage}
@@ -59,7 +59,7 @@ export default async function OpportunityKnowledgePage({ params }: { params: Pro
           <p>{opportunity.pursuit_thesis || opportunity.summary}</p>
           {opportunity.next_actions.length ? (
             <>
-              <div className="eyebrow" style={{ marginTop: 18 }}>Next Actions</div>
+              <div className="eyebrow" style={{ marginTop: 18 }}>下一步行动</div>
               <ol className="action-list">
                 {opportunity.next_actions.map((action) => <li key={action}>{action}</li>)}
               </ol>
@@ -128,7 +128,7 @@ export default async function OpportunityKnowledgePage({ params }: { params: Pro
         <section className={`${styles.knowledgeSection} ${styles.fullWidth}`}>
           <div className={styles.sectionTitle}>
             <h2>证据事实</h2>
-            <span className={styles.meta}>{view.evidence.length} 条 · Evidence-first</span>
+            <span className={styles.meta}>{view.evidence.length} 条 · 证据优先</span>
           </div>
           {view.evidence.length ? (
             <div className={styles.evidenceList}>
@@ -155,7 +155,7 @@ export default async function OpportunityKnowledgePage({ params }: { params: Pro
         </section>
 
         <section className={styles.knowledgeSection}>
-          <div className={styles.sectionTitle}><h2>正式来源与原件 Provenance</h2><span className={styles.meta}>{view.sources.length} 条</span></div>
+          <div className={styles.sectionTitle}><h2>正式来源与原件溯源</h2><span className={styles.meta}>{view.sources.length} 条</span></div>
           {view.sources.length ? (
             <div className={styles.sourceList}>
               {view.sources.map((source) => (

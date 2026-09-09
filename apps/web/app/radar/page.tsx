@@ -16,7 +16,7 @@ export default async function RadarPage() {
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">Market Radar · Where to Play</div>
+          <div className="eyebrow">市场雷达 · 何处布局</div>
           <h1>市场雷达</h1>
           <div className="muted">把分散商机转成国别与专业维度的经营资源配置判断。</div>
         </div>
@@ -27,7 +27,7 @@ export default async function RadarPage() {
         <div className="card"><div className="kpi-label">覆盖国别</div><div className="kpi-value">{radar.country_count}</div><div className="kpi-note">已有正式机会或待确认草稿</div></div>
         <div className="card"><div className="kpi-label">正式机会</div><div className="kpi-value">{radar.opportunity_count}</div><div className="kpi-note">进入持续经营研判的项目</div></div>
         <div className="card"><div className="kpi-label">待确认发现</div><div className="kpi-value">{radar.pending_draft_count}</div><div className="kpi-note">尚未污染正式机会池</div></div>
-        <div className="card"><div className="kpi-label">证据沉淀</div><div className="kpi-value">{radar.evidence_count}</div><div className="kpi-note">已绑定项目的结构化 Evidence</div></div>
+        <div className="card"><div className="kpi-label">证据沉淀</div><div className="kpi-value">{radar.evidence_count}</div><div className="kpi-note">已绑定项目的结构化证据</div></div>
       </div>
 
       {leader ? (

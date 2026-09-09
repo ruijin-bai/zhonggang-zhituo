@@ -9,12 +9,12 @@ test("admin can create an assigned Pursuit Work Item through the real BFF", asyn
   await page.goto(`/pursuit/opportunities/${HERO_ID}`);
 
   await expect(page.getByRole("heading", { level: 1, name: HERO_TITLE })).toBeVisible();
-  await expect(page.getByText("Canonical Pursuit Workspace")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Work Items" })).toBeVisible();
+  await expect(page.getByText("规范经营工作区")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "工作项" })).toBeVisible();
 
   const createForm = page
     .locator("form")
-    .filter({ has: page.getByRole("button", { name: "创建 Work Item", exact: true }) });
+    .filter({ has: page.getByRole("button", { name: "创建工作项", exact: true }) });
 
   await createForm.locator('input[name="title"]').fill(workItemTitle);
   await createForm
@@ -28,7 +28,7 @@ test("admin can create an assigned Pursuit Work Item through the real BFF", asyn
       response.request().method() === "POST" &&
       response.ok(),
   );
-  await createForm.getByRole("button", { name: "创建 Work Item", exact: true }).click();
+  await createForm.getByRole("button", { name: "创建工作项", exact: true }).click();
   await mutationCompleted;
 
   await page.goto("/pursuit");

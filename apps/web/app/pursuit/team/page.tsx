@@ -27,9 +27,9 @@ export default async function TeamWorkPage() {
       <PursuitNav />
 
       <section className={styles.metrics}>
-        <div className={styles.metric}><span>Active Workspaces</span><strong>{data.count}</strong></div>
-        <div className={styles.metric}><span>未结 Work Items</span><strong>{open}</strong></div>
-        <div className={styles.metric}><span>Blocked</span><strong>{blocked}</strong></div>
+        <div className={styles.metric}><span>在研工作区</span><strong>{data.count}</strong></div>
+        <div className={styles.metric}><span>未结工作项</span><strong>{open}</strong></div>
+        <div className={styles.metric}><span>已阻塞</span><strong>{blocked}</strong></div>
         <div className={styles.metric}><span>参与席位</span><strong>{participants}</strong></div>
       </section>
 
@@ -47,10 +47,10 @@ export default async function TeamWorkPage() {
                 <span className={styles.priority}>{item.priority}</span>
               </div>
               <div className={styles.workCounts}>
-                <div>Open<strong>{item.open}</strong></div>
+                <div>在办<strong>{item.open}</strong></div>
                 <div>进行中<strong>{item.in_progress}</strong></div>
-                <div>Blocked<strong>{item.blocked}</strong></div>
-                <div>Done<strong>{item.done}</strong></div>
+                <div>已阻塞<strong>{item.blocked}</strong></div>
+                <div>已完成<strong>{item.done}</strong></div>
               </div>
               <div className={styles.meta} style={{ marginTop: 12 }}>
                 参与 {item.participant_count} 人 · 下次复盘 {dateLabel(item.next_review_at)}
@@ -64,7 +64,7 @@ export default async function TeamWorkPage() {
           ))}
         </div>
       ) : (
-        <div className={styles.empty}>当前还没有 Active Pursuit Workspace。manager 可从正式 Opportunity 开启经营协同。</div>
+        <div className={styles.empty}>当前还没有在研经营工作区。manager 可从正式机会开启经营协同。</div>
       )}
     </>
   );

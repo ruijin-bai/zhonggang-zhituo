@@ -1,7 +1,25 @@
 import { demoOpportunities } from "./demo";
 
 export const HERO_ID = "west-africa-port-access-corridor";
-export const DEMO_FALLBACK_ALLOWED = process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK !== "false";
+
+// Demo fallback is OPT-IN, not opt-out.
+//
+// Rationale: when the API is unreachable, silently rendering hardcoded demo records makes the
+// product look like a mock-up. For competition judging and live demos that is an integrity
+// risk, so fallback only happens when the operator explicitly enables it, and every page that
+// uses it must render a visible warning banner.
+export const DEMO_FALLBACK_ALLOWED = process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
+
+export const DEMO_BANNER_TEXT =
+  "当前展示内置演示样例，不是实时业务数据。请检查后端服务与数据库连接。";
+
+/**
+ * Wraps a demo payload so pages can tell real data from fallback data.
+ * `isDemo` drives the visible warning banner; never render demo content without it.
+ */
+export function withDemoFlag<T>(payload: T): T & { isDemo: true } {
+  return { ...(payload as object), isDemo: true } as T & { isDemo: true };
+}
 
 export function getDemoHero() {
   return demoOpportunities.find((item) => item.id === HERO_ID) ?? demoOpportunities[0];

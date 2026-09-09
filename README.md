@@ -134,6 +134,11 @@ Pursuit Workspace
 
 短期坚持：**模块化单体 + 独立 Worker**。不为了形式上的“企业级”过早拆微服务。
 
+Oracle Cloud 单机长期 Internal Pilot 的独立部署层、Free Tier IaC、升级、健康、备份、恢复与真实来源验收见：
+
+- `deploy/pilot/README.md`
+- `infra/oracle-pilot/README.md`
+
 ## 核心数据原则
 
 1. **Fact / Inference / Recommendation 分层**：事实必须绑定 Source / Evidence。

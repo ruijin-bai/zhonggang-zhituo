@@ -24,7 +24,7 @@ export default async function CandidateReviewPage({ params }: { params: Promise<
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">Candidate Opportunity Review</div>
+          <div className="eyebrow">候选商机复核</div>
           <h1>{candidate.discovery.title}</h1>
           <div className="muted">
             {candidate.discovery.country} · {candidate.discovery.sector} · {candidate.discovery.stage} · {candidate.status}

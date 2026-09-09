@@ -19,6 +19,28 @@ function severityClass(severity: string): string {
   return styles.open;
 }
 
+const SEVERITY_LABEL: Record<string, string> = {
+  critical: "严重",
+  high: "高优",
+  warning: "警示",
+  info: "提示",
+};
+
+function severityLabel(severity: string): string {
+  return SEVERITY_LABEL[severity] ?? severity;
+}
+
+const REMINDER_STATUS_LABEL: Record<string, string> = {
+  open: "待确认",
+  acknowledged: "已确认",
+  resolved: "已关闭",
+  suppressed: "已抑制",
+};
+
+function reminderStatusLabel(status: string): string {
+  return REMINDER_STATUS_LABEL[status] ?? status;
+}
+
 function dateTime(value: string | null): string {
   if (!value) return "未设置";
   const date = new Date(value);
@@ -69,7 +91,7 @@ export default function PursuitReminderInbox({ data, canAcknowledge }: Props) {
         <span className={styles.meta}>{data.count} 条 active / acknowledged</span>
       </div>
       <p className={styles.note}>
-        Reminder 由截止时间、持续阻塞、Gate 与 Review 状态自动生成。已知悉不等于问题已解决；条件解除后系统才会自动关闭提醒。
+        提醒由截止时间、持续阻塞、门禁与复核状态自动生成。已知悉不等于问题已解决；条件解除后系统才会自动关闭提醒。
       </p>
       {error ? <div className={styles.error} style={{ marginBottom: 10 }}>{error}</div> : null}
       {data.items.length ? (
@@ -84,9 +106,9 @@ export default function PursuitReminderInbox({ data, canAcknowledge }: Props) {
                   <div className={styles.meta}>{item.opportunity_title} · {item.type}</div>
                 </div>
                 <div className={styles.badges} style={{ marginTop: 0 }}>
-                  <span className={`${styles.status} ${severityClass(item.severity)}`}>{item.severity}</span>
+                  <span className={`${styles.status} ${severityClass(item.severity)}`}>{severityLabel(item.severity)}</span>
                   {item.is_escalation ? <span className={styles.blocked}>升级到我</span> : null}
-                  <span className={styles.status}>{item.status}</span>
+                  <span className={styles.status}>{reminderStatusLabel(item.status)}</span>
                 </div>
               </div>
               <div className={styles.note} style={{ marginTop: 8 }}>{item.message}</div>

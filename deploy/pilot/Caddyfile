@@ -1,0 +1,25 @@
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	encode zstd gzip
+	header -Server
+
+	handle /_pilot/health {
+		respond "ok" 200
+	}
+
+	handle {
+		basic_auth {
+			{$PILOT_BASIC_AUTH_USER} {$PILOT_BASIC_AUTH_HASH}
+		}
+
+		reverse_proxy web:3000 {
+			header_up -X-Zhituo-User
+			header_up -X-Zhituo-Organization
+			header_up X-Zhituo-User {$PILOT_ADMIN_EMAIL}
+		}
+	}
+}

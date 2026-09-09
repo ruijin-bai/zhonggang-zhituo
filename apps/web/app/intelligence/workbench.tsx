@@ -46,7 +46,7 @@ function offlineResult(sourceRank: string): Result {
     decision_after: canApply ? "GO" : "WATCH",
     applied_fields: canApply ? ["financing", "project_maturity"] : [],
     note: canApply
-      ? "当前 API 不可用，已使用离线演示规则复现 72/B → 81/A。正式运行时会持久化 Evidence、ScoreSnapshot 和 Event。"
+      ? "当前 API 不可用，已使用离线演示规则复现 72/B → 81/A。正式运行时会持久化证据、评分快照和事件。"
       : "当前来源等级未达到自动改分门槛，因此仅作为证据预览，不改变经营判断。",
   };
 }
@@ -117,7 +117,7 @@ export default function IntelligenceWorkbench() {
           {error && <div className="error-box">{error}</div>}
           {result && (
             <div className="stack">
-              <div className="flow"><strong>{result.extraction_mode === "ai" ? "AI 结构化抽取" : "确定性规则"}</strong> → Evidence → Scoring → Snapshot</div>
+              <div className="flow"><strong>{result.extraction_mode === "ai" ? "AI 结构化抽取" : "确定性规则"}</strong> → 证据 → 评分 → 快照</div>
               <p>{result.extraction.summary}</p>
               {result.score_before !== undefined && result.score_after !== undefined && (
                 <div className="score-change-box">

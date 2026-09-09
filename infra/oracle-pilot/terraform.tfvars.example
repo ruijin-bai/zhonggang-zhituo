@@ -1,0 +1,18 @@
+tenancy_ocid      = "<tenancy-ocid>"
+compartment_ocid  = "<compartment-ocid>"
+region            = "<home-region-key>"
+home_region       = "<same-home-region-key>"
+availability_domain = "<optional-ad-name>"
+ssh_public_key    = "ssh-ed25519 <public-key>"
+ssh_ingress_cidr  = "<your-public-ip>/32"
+
+# Set true only after authenticated Limits, Quotas and Usage confirms these
+# resources fit entirely inside the tenancy's remaining Always Free allocation.
+always_free_acknowledged = false
+
+instance_shape       = "VM.Standard.A1.Flex"
+instance_ocpus       = 2
+instance_memory_gb   = 12
+boot_volume_size_gb  = 100
+assign_public_ip     = true
+ubuntu_image_ocid    = ""
