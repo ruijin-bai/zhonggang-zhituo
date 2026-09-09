@@ -93,7 +93,7 @@ export default function DiscoveryWorkbench() {
           {result && <div className="stack">
             <div className="flow"><strong>{result.mode === "ai" ? "AI Structured Output" : "确定性识别"}</strong> → 草稿 → 去重 → 人工确认</div>
             <div className="card" style={{ padding: 16 }}>
-              <div className="eyebrow">{Math.round(result.draft.discovery.confidence * 100)}% DISCOVERY CONFIDENCE</div>
+              <div className="eyebrow">{Math.round(result.draft.discovery.confidence * 100)}% 候选置信度</div>
               <h2 style={{ marginTop: 8 }}>{result.draft.discovery.title}</h2>
               <div className="muted">{result.draft.discovery.country} · {result.draft.discovery.region} · {result.draft.discovery.sector}</div>
               <p>{result.draft.discovery.summary}</p>

@@ -38,11 +38,11 @@ export default async function PursuitMyWorkPage() {
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">Pursuit Orchestration · My Work</div>
+          <div className="eyebrow">经营协同 · 我的工作</div>
           <h1>我的经营工作</h1>
           <div className="muted">
             {data.membership
-              ? `${data.membership.display_name} · ${data.membership.role} · 只显示当前账号真实绑定的 Work Item、Review 与 Reminder。`
+              ? `${data.membership.display_name} · ${data.membership.role} · 只显示当前账号真实绑定的工作项、复盘与提醒。`
               : "当前账号尚未解析到有效 Membership。"}
           </div>
         </div>
@@ -53,7 +53,7 @@ export default async function PursuitMyWorkPage() {
       <section className={styles.metrics}>
         <div className={styles.metric}><span>我的未结事项</span><strong>{data.work_items.length}</strong></div>
         <div className={styles.metric}><span>主动提醒</span><strong>{reminders.count}</strong></div>
-        <div className={styles.metric}><span>Critical</span><strong>{criticalReminders}</strong></div>
+        <div className={styles.metric}><span>严重</span><strong>{criticalReminders}</strong></div>
         <div className={styles.metric}><span>待我复核</span><strong>{data.pending_reviews.length}</strong></div>
       </section>
 
@@ -62,12 +62,12 @@ export default async function PursuitMyWorkPage() {
       <div className={styles.grid2}>
         <section className={styles.section}>
           <div className={styles.sectionHead}>
-            <h2>我的 Work Items</h2>
+            <h2>我的工作项</h2>
             <span className={styles.meta}>参与 {data.workspace_count} 个 Pursuit Workspace</span>
           </div>
           <div className={styles.badges} style={{ marginBottom: 12 }}>
-            <span className={styles.badge}>Blocked {blocked}</span>
-            <span className={styles.badge}>Overdue {overdue}</span>
+            <span className={styles.badge}>已阻塞 {blocked}</span>
+            <span className={styles.badge}>已逾期 {overdue}</span>
           </div>
           {data.work_items.length ? (
             <div className={styles.list}>
@@ -93,14 +93,14 @@ export default async function PursuitMyWorkPage() {
               ))}
             </div>
           ) : (
-            <div className={styles.empty}>当前没有分配给你的未结 Work Item。</div>
+            <div className={styles.empty}>当前没有分配给你的未结工作项。</div>
           )}
         </section>
 
         <section className={styles.section}>
           <div className={styles.sectionHead}>
             <h2>待我复核</h2>
-            <span className={styles.meta}>Decision Gate Review</span>
+            <span className={styles.meta}>决策门禁复盘</span>
           </div>
           {data.pending_reviews.length ? (
             <div className={styles.list}>
@@ -111,7 +111,7 @@ export default async function PursuitMyWorkPage() {
                       <strong>{review.gate_title}</strong>
                       <div className={styles.meta}>{review.opportunity_title} · {review.country}</div>
                     </div>
-                    <span className={styles.status}>pending</span>
+                    <span className={styles.status}>待启动</span>
                   </div>
                   <div className={styles.meta} style={{ marginTop: 8 }}>请求时间：{dateLabel(review.requested_at)}</div>
                   {review.opportunity_id ? (
@@ -125,7 +125,7 @@ export default async function PursuitMyWorkPage() {
               ))}
             </div>
           ) : (
-            <div className={styles.empty}>当前没有等待你处理的 Gate Review。</div>
+            <div className={styles.empty}>当前没有等待你处理的决策门禁复盘。</div>
           )}
         </section>
       </div>
