@@ -7,11 +7,12 @@
 # script is for local development, demos and reviewer reproductions only.
 #
 # Usage:
-#   bash scripts/dev-up.sh            # API :8000, Web :3000
+#   bash scripts/dev-up.sh            # API :8002, Web :3001
 #   API_PORT=8001 bash scripts/dev-up.sh
-#   WEB_PORT=3001 bash scripts/dev-up.sh
+#   WEB_PORT=3002 bash scripts/dev-up.sh
 #
-# Ctrl+C stops both services.
+# NOTE: 默认端口刻意错开「智眸工笔」项目（其前端占 :3000、后端占 :8001），
+#       避免本机两个项目同时开发时端口冲突。Ctrl+C stops both services.
 
 set -euo pipefail
 
@@ -20,8 +21,8 @@ cd "$ROOT"
 
 PY="$ROOT/apps/api/.venv/Scripts/python.exe"
 DB_FILE="$ROOT/data/zhituo.db"
-API_PORT="${API_PORT:-8000}"
-WEB_PORT="${WEB_PORT:-3000}"
+API_PORT="${API_PORT:-8002}"
+WEB_PORT="${WEB_PORT:-3001}"
 
 if [ ! -f "$PY" ]; then
   echo "error: backend virtualenv not found at $PY" >&2
@@ -61,6 +62,9 @@ echo "[2/4] starting API on http://127.0.0.1:$API_PORT ..."
 API_PID=$!
 
 echo "[3/4] starting Web on http://127.0.0.1:$WEB_PORT ..."
+# The Web BFF (server-api.ts) reads API_BASE_URL at request time; pinning it here so the
+# server-side fetch targets the API port we just started, not the hardcoded 8000 default.
+export API_BASE_URL="http://127.0.0.1:$API_PORT"
 (cd apps/web && npm run dev -- --port "$WEB_PORT") &
 WEB_PID=$!
 

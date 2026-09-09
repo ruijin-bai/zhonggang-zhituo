@@ -42,6 +42,14 @@ export async function serverApiFetch(path: string, init: NextFetchInit = {}) {
   } else {
     // Development only. API production guardrails reject this mode.
     copyIfPresent(incoming, outgoing, "x-zhituo-user");
+    // Fallback for server-side fetches on anonymous public routes (landing dashboard,
+    // market radar, opportunity pool). Without an incoming user header the request
+    // would be rejected by the API's role guard; pin DEV_USER_EMAIL so public pages
+    // still resolve data in development. Production deploys set API_AUTH_MODE to
+    // oidc / trusted_proxy and skip this branch entirely.
+    if (!outgoing.get("x-zhituo-user") && process.env.DEV_USER_EMAIL) {
+      outgoing.set("X-Zhituo-User", process.env.DEV_USER_EMAIL);
+    }
   }
 
   return fetch(`${API_BASE_URL}${path}`, {

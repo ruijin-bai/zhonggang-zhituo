@@ -5,13 +5,15 @@
 # `npm run dev` spawns child processes.
 #
 # Usage:
-#   bash scripts/dev-down.sh            # kills :8000 and :3000
+#   bash scripts/dev-down.sh            # kills :8002 and :3001
 #   API_PORT=8001 bash scripts/dev-down.sh
+#
+# NOTE: 默认端口刻意错开「智眸工笔」项目，避免误杀其 :3000/:8001 服务。
 
 set -uo pipefail
 
-API_PORT="${API_PORT:-8000}"
-WEB_PORT="${WEB_PORT:-3000}"
+API_PORT="${API_PORT:-8002}"
+WEB_PORT="${WEB_PORT:-3001}"
 
 for port in "$API_PORT" "$WEB_PORT"; do
   # netstat -ano | grep LISTENING | last column is the owning PID

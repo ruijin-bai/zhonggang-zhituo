@@ -229,6 +229,20 @@ def seed_demo_data(session: Session) -> int:
             session.add_all(actions)
             session.flush()
             sync_legacy_tracking_snapshot(session, HERO_ID)
+            # Demo seed binds the seeded Work Items to the admin membership so the
+            # "我的经营工作" tab is not empty in development. The legacy sync above
+            # left `assignee_membership_id=None` because PursuitActionRecord stores
+            # the owner as a free-text label, not a FK. We resolve it here against the
+            # identity that _seed_identity provisioned (DEV_USER_EMAIL=admin@zhituo.local).
+            admin_membership_id = session.scalar(
+                select(MembershipRecord.id).join(UserRecord).where(UserRecord.email == "admin@zhituo.local")
+            )
+            if admin_membership_id is not None:
+                for work_item in session.scalars(
+                    select(PursuitWorkItemRecord).where(PursuitWorkItemRecord.opportunity_id == HERO_ID)
+                ).all():
+                    if work_item.assignee_membership_id is None:
+                        work_item.assignee_membership_id = admin_membership_id
             v1 = {
                 "win_theme": "依托港航与交通综合能力参与项目经营，重点验证融资与采购窗口。",
                 "client_need": "提升港区集疏运效率并形成可实施的交通基础设施方案。",

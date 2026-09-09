@@ -26,6 +26,8 @@ Thumbs.db
 # Runtime
 *.log
 *.tsbuildinfo
+outputs_wb/
+.workbuddy/
 
 # Local demo database (dev-up.sh builds it from scratch; never commit binary DBs)
 data/*.db
